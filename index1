@@ -3,14 +3,14 @@ talib = require 'talib'
 params = require 'params'
 
 NUMBER_OF_DAYS = params.add "Number of days used for calculations", .03
-CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", .01
-CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", .01
+CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
 PCT_OF_FUNDS = params.add "Percent of funds to use for orders", 100
 PCT_OF_SPLIT = params.add "Percent iceberg split", 33
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
 ORDER_TYPE = params.addOptions 'Order type', ['market', 'limit', 'iceberg'], 'limit'
 ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.003
-
+STOP_LOSS = params.add 'Stop loss % (0 for none)', 0
 init: (context) ->
 
     info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Bot"
