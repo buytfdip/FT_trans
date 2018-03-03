@@ -1,4 +1,3 @@
-
 trading = require 'trading'
 talib = require 'talib'
 params = require 'params'
