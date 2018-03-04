@@ -1,20 +1,6 @@
-###
-Configurable Fisher Transform with MACD and RSI confirmation
-Copyright (C) 2018 DiSTANT (for CryptoTrader.org)
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-###
+#FT ONE MIN WONDER BOT BY BUYTFDIP
+#Copyright (c) 2018, JOHN MARKOWSKY
+# All rights reserved.
 
 trading = require 'trading'
 talib = require 'talib'
@@ -26,6 +12,9 @@ CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
 PCT_OF_FUNDS = params.add "Percent of funds to use for orders", 100
 PCT_OF_SPLIT = params.add "Percent iceberg split", 25
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
+STOP_LOSS = params.add 'Stop loss % (0 for none)', 0
+ORDER_TYPE = params.addOptions 'Order type', ['market', 'limit', 'iceberg'], 'limit'
+ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.003
 
 init: (context) ->
 
@@ -142,6 +131,7 @@ handle: (context, data) ->
             if (!storage.bought and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - 2] and _.last(rsi) > rsi[rsi.length - 2])
                 currentCurrency = startCurrency
                 currentAssets = startAssets
+                price = ticker.sell*ORDER_PRICE
 
                 totalCurrencyToSpend = startCurrency * (PCT_OF_FUNDS/100)
                 split = (totalCurrencyToSpend * (PCT_OF_SPLIT/100))
@@ -157,8 +147,9 @@ handle: (context, data) ->
 
                     ticker = trading.getTicker(i)
                     buyAmount = Math.min((split/ticker.buy)*.9975, amountRemaining/ticker.buy)
+                    
                     try
-                        trading.buy i, 'market', buyAmount
+                        trading.buy i, ORDER_TYPE, buyAmount, price, 60 * @config.interval
                     catch error
                         if (/insufficient funds/i.exec(error))
                             currentCurrency = startingCurrency
@@ -199,6 +190,7 @@ handle: (context, data) ->
             if (!storage.sold and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - 2] and _.last(rsi) < rsi[rsi.length - 2])
                 currentCurrency = startCurrency
                 currentAssets = startAssets
+                price = ticker.buy/ORDER_PRICE
 
                 totalAssetsToSell = startAssets * (PCT_OF_FUNDS/100)
                 split = (totalAssetsToSell * (PCT_OF_SPLIT/100))
@@ -215,7 +207,7 @@ handle: (context, data) ->
                     ticker = trading.getTicker(i)
                     sellAmount = Math.min(split*.9975, amountRemaining)
                     try
-                        trading.sell i, 'market', sellAmount
+                        trading.sell i, ORDER_TYPE, sellAmount, price, 60 * @config.interval
                     catch error
                         if (/insufficient funds/i.exec(error))
                             currentCurrency = startingCurrency
