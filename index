@@ -1,3 +1,7 @@
+#ONE MIN WONDER BOT BY BUYTFDIP
+# Copyright (c) 2018, JOHN MARKOWSKY
+# All rights reserved.
+
 trading = require 'trading'
 talib = require 'talib'
 params = require 'params'
@@ -11,6 +15,7 @@ MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .01
 ORDER_TYPE = params.addOptions 'Order type', ['market', 'limit', 'iceberg'], 'limit'
 ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.003
 STOP_LOSS = params.add 'Stop loss % (0 for none)', 0
+
 init: (context) ->
 
     info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Bot"
@@ -142,7 +147,7 @@ handle: (context, data) ->
                     ticker = trading.getTicker(i)
                     buyAmount = Math.min((split/ticker.buy)*.9975, amountRemaining/ticker.buy)
                     try
-                        trading.buy i, ORDER_TYPE, buyAmount, ticker.buy/ORDER_PRICE
+                        trading.buy i, ORDER_TYPE, buyAmount, (ticker.sell*ORDER_PRICE), 60 * @config.interval
                     catch error
                         if (/insufficient funds/i.exec(error))
                             currentCurrency = startingCurrency
@@ -199,7 +204,7 @@ handle: (context, data) ->
                     ticker = trading.getTicker(i)
                     sellAmount = Math.min(split*.9975, amountRemaining)
                     try
-                        trading.sell i, ORDER_TYPE, sellAmount, ticker.sell*ORDER_PRICE
+                        trading.sell i, ORDER_TYPE, sellAmount, (ticker.buy/ORDER_PRICE), 60 * @config.interval
                     catch error
                         if (/insufficient funds/i.exec(error))
                             currentCurrency = startingCurrency
