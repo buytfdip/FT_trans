@@ -1,20 +1,35 @@
+###
+Configurable Fisher Transform with MACD and RSI confirmation
+Copyright (C) 2018 DiSTANT (for CryptoTrader.org)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+###
+
 trading = require 'trading'
 talib = require 'talib'
 params = require 'params'
 
-NUMBER_OF_DAYS = params.add "Number of days used for calculations", .03
-CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", .05
-CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", .05
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", 3
+CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
 PCT_OF_FUNDS = params.add "Percent of funds to use for orders", 100
-PCT_OF_SPLIT = params.add "Percent iceberg split", 33
+PCT_OF_SPLIT = params.add "Percent iceberg split", 25
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
-ORDER_TYPE = params.addOptions 'Order type', ['market', 'limit', 'iceberg'], 'limit'
-ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.003
-STOP_LOSS = params.add 'Stop loss % (0 for none)', 0
 
 init: (context) ->
 
-    info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Bot"
+    info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Bot By DiSTANT"
     info "Please be patient while the bot waits for a signal"
 
     setPlotOptions
@@ -22,8 +37,6 @@ init: (context) ->
             color: 'rgba(46, 204, 113, .25)'
         sold:
             color: 'rgba(231, 76, 60, .25)'
-	stopLoss:
-            color: 'rgba(0, 0, 0, .25)'
         bears:
             color: 'rgba(192, 57, 43, .25)'
             secondary: true
@@ -145,7 +158,7 @@ handle: (context, data) ->
                     ticker = trading.getTicker(i)
                     buyAmount = Math.min((split/ticker.buy)*.9975, amountRemaining/ticker.buy)
                     try
-                        trading.buy i, ORDER_TYPE, buyAmount, ticker.buy/ORDER_PRICE
+                        trading.buy i, 'market', buyAmount
                     catch error
                         if (/insufficient funds/i.exec(error))
                             currentCurrency = startingCurrency
@@ -174,18 +187,9 @@ handle: (context, data) ->
                 storage.consecutiveSellSignals = 0
                 storage.lastBuyPrice = salePrice
                 storage.buys++
-		
+
                 plotMark
                     bought: salePrice
-			
-	if storage.bought = true and STOP_LOSS > 0 and ticker < salePrice * (100-STOP_LOSS)/100
-		sellAmount = Math.min(split*.9975, amountRemaining)
-                try
-                trading.sell i, ORDER_TYPE, sellAmount, ticker.sell*ORDER_PRICE
-		
-                plotMark
-                    bought: stopLoss
-			
         else if (fisher < storage.lastFisher)
             storage.consecutiveSellSignals += 1
             storage.consecutiveBuySignals = 0
@@ -211,7 +215,7 @@ handle: (context, data) ->
                     ticker = trading.getTicker(i)
                     sellAmount = Math.min(split*.9975, amountRemaining)
                     try
-                        trading.sell i, ORDER_TYPE, sellAmount, ticker.sell*ORDER_PRICE
+                        trading.sell i, 'market', sellAmount
                     catch error
                         if (/insufficient funds/i.exec(error))
                             currentCurrency = startingCurrency
