@@ -11,7 +11,7 @@ CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
 CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
 PCT_OF_FUNDS = params.add "Percent of funds to use for orders", 100
 PCT_OF_SPLIT = params.add "Percent iceberg split", 100
-MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .01
+MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .0001
 ORDER_TYPE = params.addOptions 'Order type', ['market', 'limit', 'iceberg'], 'limit'
 ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.005
 
@@ -144,7 +144,7 @@ handle: (context, data) ->
                     startingAssets = @portfolio.positions[i.asset()].amount
 
                     ticker = trading.getTicker(i)                    
-                    buyAmount = Math.min((split/ticker.buy)*.9975, amountRemaining/ticker.buy)
+                    buyAmount = Math.min((split/ticker.buy)*.995, amountRemaining/ticker.buy)
                     price = (ticker.buy/ORDER_PRICE)
                     try
                         trading.buy i, ORDER_TYPE, buyAmount, price, 60 * @config.interval
@@ -202,7 +202,7 @@ handle: (context, data) ->
                     startingAssets = @portfolio.positions[i.asset()].amount
 
                     ticker = trading.getTicker(i)
-                    sellAmount = Math.min(split*.9975, amountRemaining)
+                    sellAmount = Math.min(split*.995, amountRemaining)
                     price = (ticker.sell*ORDER_PRICE)
                     try
                         trading.sell i, ORDER_TYPE, sellAmount, price, 60 * @config.interval
