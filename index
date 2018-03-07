@@ -13,7 +13,7 @@ PCT_OF_FUNDS = params.add "Percent of funds to use for orders", 100
 PCT_OF_SPLIT = params.add "Percent iceberg split", 100
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .01
 ORDER_TYPE = params.addOptions 'Order type', ['market', 'limit', 'iceberg'], 'limit'
-ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.002
+ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.005
 
 init: (context) ->
 
@@ -143,10 +143,11 @@ handle: (context, data) ->
                     startingCurrency = @portfolio.positions[i.curr()].amount
                     startingAssets = @portfolio.positions[i.asset()].amount
 
-                    ticker = trading.getTicker(i)
+                    ticker = trading.getTicker(i)                    
                     buyAmount = Math.min((split/ticker.buy)*.9975, amountRemaining/ticker.buy)
+                    price = (ticker.buy/ORDER_PRICE)
                     try
-                        trading.buy i, ORDER_TYPE, buyAmount, (ticker.buy/ORDER_PRICE), 600 * @config.interval
+                        trading.buy i, ORDER_TYPE, buyAmount, price, 60 * @config.interval
                     catch error
                         if (/insufficient funds/i.exec(error))
                             currentCurrency = startingCurrency
@@ -202,8 +203,9 @@ handle: (context, data) ->
 
                     ticker = trading.getTicker(i)
                     sellAmount = Math.min(split*.9975, amountRemaining)
+                    price = (ticker.sell*ORDER_PRICE)
                     try
-                        trading.sell i, ORDER_TYPE, sellAmount, (ticker.sell*ORDER_PRICE), 600 * @config.interval
+                        trading.sell i, ORDER_TYPE, sellAmount, price, 60 * @config.interval
                     catch error
                         if (/insufficient funds/i.exec(error))
                             currentCurrency = startingCurrency
