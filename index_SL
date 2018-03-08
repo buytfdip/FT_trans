@@ -34,7 +34,7 @@ init: (context) ->
             secondary: true
             size: 5
         StopLoss:
-			color: 'black'
+	    color: 'black'
 
 
 handle: (context, data) ->
@@ -130,7 +130,7 @@ handle: (context, data) ->
                 bulls: 1
 
             minimumCurrency = i.price * MINIMUM_ORDER_VALUE
-            if (!storage.sold and STOP_LOSS > 0 and i.close  < storage.lastBuyPrice * (100-STOP_LOSS)/100)                
+            if !storage.sold and STOP_LOSS > 0 and i.price  < storage.lastBuyPrice * (100-STOP_LOSS)/100                
                 currentCurrency = startCurrency
                 currentAssets = startAssets
 
@@ -186,7 +186,7 @@ handle: (context, data) ->
                     else
                         storage.losses++
                 plotMark
-                    StopLoss: i.close
+                    StopLoss: Stop
 
             if (!storage.bought and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - 2] and _.last(rsi) > rsi[rsi.length - 2])
                 currentCurrency = startCurrency
