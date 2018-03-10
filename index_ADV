@@ -1,38 +1,73 @@
-#ONE MIN WONDER BOT BY BUYTFDIP
-# Copyright (c) 2018, JOHN MARKOWSKY
-# All rights reserved.
+###
+Configurable Fisher Transform with MACD and RSI confirmation
+Copyright (C) 2018 DiSTANT (for CryptoTrader.org)
+Modified by dyndragon
+- Added configurable options for buy/sell %
+- Added debug output for MACD Signal and RSI
+- Added plotting for MACD and RSI
+Modified by buyTFdip
+-Added multi funtion ordering
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+###
 
 trading = require 'trading'
 talib = require 'talib'
 params = require 'params'
 
-NUMBER_OF_DAYS = params.add "Number of days used for calculations", .2
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", 3
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
-CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 10
-PCT_OF_FUNDS = params.add "Percent of funds to use for orders", 100
-PCT_OF_SPLIT = params.add "Percent iceberg split", 100
-MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .0001
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
+PCT_OF_FUNDS_BUY = params.add "Percent of funds to use for buy orders", 100
+PCT_OF_ASSETS_SELL = params.add "Percent of assets to use for sell orders", 100
+BOOK_PROFIT_PCT = params.add "Percent gain before taking profits (set to 0 to disable)", 0
+PCT_TO_BOOK = params.add "Percent of holdings to sell when booking profits", 50
+PCT_OF_SPLIT = params.add "Percent iceberg split", 25
+MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
 ORDER_TYPE = params.addOptions 'Order type', ['market', 'limit', 'iceberg'], 'limit'
 ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.002
 
 init: (context) ->
 
-    info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Bot"
+    info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Bot By DiSTANT"
     info "Please be patient while the bot waits for a signal"
 
     setPlotOptions
         bought:
-            color: 'rgba(46, 204, 113, .25)'
+            color: 'rgba(46, 204, 113, .80)'
         sold:
-            color: 'rgba(231, 76, 60, .25)'
+            color: 'rgba(231, 76, 60, .80)'
+        bookProfit:
+            color: 'rgba(231, 76, 60, .40)'
         bears:
-            color: 'rgba(192, 57, 43, .25)'
-            secondary: true
+            color: 'rgba(192, 57, 43, .15)'
+            secondary: false
             size: 5
         bulls:
-            color: 'rgba(39, 174, 96, .25)'
-            secondary: true
+            color: 'rgba(39, 174, 96, .15)'
+            secondary: false
             size: 5
+        macdSignal:
+            color: 'rgba(127, 63, 191, .50)'
+            size: 5
+            secondary: true
+            lineWidth: 3
+        rsiSignal:
+            color: 'rgba(63, 127, 191, .50)'
+            size: 5
+            secondary: true
+            lineWidth: 3
 
 handle: (context, data) ->
     storage.consecutiveSellSignals ?= 0
@@ -44,6 +79,7 @@ handle: (context, data) ->
     storage.lastSellPrice ?= null
     storage.buys ?= 0
     storage.bought ?= false
+    storage.profitsbooked ?= false
     storage.lastBuyPrice ?= null
     storage.lastValue ?= null
     storage.lastFisher ?= null
@@ -124,14 +160,14 @@ handle: (context, data) ->
             storage.consecutiveSellSignals = 0
             storage.consecutiveBuySignals += 1
             plotMark
-                bulls: 1
+                bulls: _.last(i.high) * 1.03
 
             minimumCurrency = i.price * MINIMUM_ORDER_VALUE
             if (!storage.bought and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - 2] and _.last(rsi) > rsi[rsi.length - 2])
                 currentCurrency = startCurrency
                 currentAssets = startAssets
 
-                totalCurrencyToSpend = startCurrency * (PCT_OF_FUNDS/100)
+                totalCurrencyToSpend = startCurrency * (PCT_OF_FUNDS_BUY/100)
                 split = (totalCurrencyToSpend * (PCT_OF_SPLIT/100))
 
                 if (split < minimumCurrency)
@@ -143,8 +179,8 @@ handle: (context, data) ->
                     startingCurrency = @portfolio.positions[i.curr()].amount
                     startingAssets = @portfolio.positions[i.asset()].amount
 
-                    ticker = trading.getTicker(i)                    
-                    buyAmount = Math.min((split/ticker.buy)*.995, amountRemaining/ticker.buy)
+                    ticker = trading.getTicker(i)
+                    buyAmount = Math.min((split/ticker.buy)*.99, amountRemaining/ticker.buy)
                     price = (ticker.buy/ORDER_PRICE)
                     try
                         trading.buy i, ORDER_TYPE, buyAmount, price, 60 * @config.interval
@@ -172,6 +208,7 @@ handle: (context, data) ->
                 info "Finished Buying!"
                 storage.sold = false
                 storage.bought = true
+                storage.profitsbooked = false
                 storage.consecutiveBuySignals = 0
                 storage.consecutiveSellSignals = 0
                 storage.lastBuyPrice = salePrice
@@ -183,13 +220,12 @@ handle: (context, data) ->
             storage.consecutiveSellSignals += 1
             storage.consecutiveBuySignals = 0
             plotMark
-                bears: -1
-
+                bears: _.last(i.low) * 0.97
             if (!storage.sold and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - 2] and _.last(rsi) < rsi[rsi.length - 2])
                 currentCurrency = startCurrency
                 currentAssets = startAssets
 
-                totalAssetsToSell = startAssets * (PCT_OF_FUNDS/100)
+                totalAssetsToSell = startAssets * (PCT_OF_ASSETS_SELL/100)
                 split = (totalAssetsToSell * (PCT_OF_SPLIT/100))
 
                 if (split < MINIMUM_ORDER_VALUE)
@@ -202,7 +238,7 @@ handle: (context, data) ->
                     startingAssets = @portfolio.positions[i.asset()].amount
 
                     ticker = trading.getTicker(i)
-                    sellAmount = Math.min(split*.995, amountRemaining)
+                    sellAmount = Math.min(split*.99, amountRemaining)
                     price = (ticker.sell*ORDER_PRICE)
                     try
                         trading.sell i, ORDER_TYPE, sellAmount, price, 60 * @config.interval
@@ -225,7 +261,7 @@ handle: (context, data) ->
 
                 totalSold = (startAssets - currentAssets)
                 currencyGain = (currentCurrency - startCurrency)
-                salePrice = (ticker.sell*ORDER_PRICE)
+                salePrice = currencyGain/totalSold
                 warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
                 warn "Finished Selling!"
                 storage.sold = true
@@ -244,13 +280,72 @@ handle: (context, data) ->
         else
             storage.consecutiveBuySignals = 0
             storage.consecutiveSellSignals = 0
+        if (BOOK_PROFIT_PCT > 0 and storage.bought and !storage.profitsbooked and (storage.lastBuyPrice *( 1 + (BOOK_PROFIT_PCT/100))) <= i.price)
+            info "Time to book profits!"
+            currentCurrency = startCurrency
+            currentAssets = startAssets
+
+            totalAssetsToSell = startAssets * (PCT_TO_BOOK/100)
+            split = (totalAssetsToSell * (PCT_OF_SPLIT/100))
+
+            if (split < MINIMUM_ORDER_VALUE)
+                split = totalAssetsToSell
+
+            amountRemaining = totalAssetsToSell
+            infLoop = 0
+            while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
+                startingCurrency = @portfolio.positions[i.curr()].amount
+                startingAssets = @portfolio.positions[i.asset()].amount
+
+                ticker = trading.getTicker(i)
+                sellAmount = Math.min(split*.9975, amountRemaining)
+                try
+                    trading.sell i, 'market', sellAmount
+                catch error
+                    if (/insufficient funds/i.exec(error))
+                        currentCurrency = startingCurrency
+                        currentAssets = startingAssets
+                        break
+
+                sleep(30000)
+                i.update
+                currentCurrency = @portfolio.positions[i.curr()].amount
+                currentAssets = @portfolio.positions[i.asset()].amount
+                assetDelta = (startingAssets - currentAssets)
+                if (assetDelta != 0)
+                    currencyDelta = (currentCurrency - startingCurrency)
+                    salePrice = (currencyDelta/assetDelta)
+                    warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+                amountRemaining -= assetDelta
+
+            totalSold = (startAssets - currentAssets)
+            currencyGain = (currentCurrency - startCurrency)
+            salePrice = currencyGain/totalSold
+            warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+            warn "Finished Selling!"
+            storage.lastSellPrice = salePrice
+            storage.sells++
+            if (storage.lastBuyPrice != null)
+                if (salePrice > storage.lastBuyPrice)
+                    storage.wins++
+                else
+                    storage.losses++
+            plotMark
+                bookProfit: salePrice
+            storage.profitsbooked = true
 
     storage.lastFisher = fisher
 
     botPL = ((currentWorth - storage.initialWorth)/storage.initialWorth) * 100
     marketPL = ((currentPrice - storage.initialPrice)/storage.initialPrice) * 100
 
-    info "---------- #{NUMBER_OF_DAYS}-Day Fisher Transform ----------"
+    info "---------- #{NUMBER_OF_DAYS}-Day Fisher Transform By DiSTANT ----------"
+    info "_.last(s): #{_.last(s)} s[s.length - 2]: #{s[s.length - 2]}"
+    plot
+        macdSignal: _.last(s)
+    info "_.last(rsi): #{_.last(rsi)} rsi[rsi.length - 2]: #{rsi[rsi.length - 2]}"
+    plot
+        rsiSignal: _.last(rsi)
     info "Current Price: #{currentPrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
     info "Exchange Wallet: #{startCurrency.toFixed(8)} #{i._pair[1].toUpperCase()} and #{startAssets.toFixed(8)} #{i._pair[0].toUpperCase()}"
     info "Start Worth: #{storage.initialWorth.toFixed(8)} #{i._pair[1].toUpperCase()} or #{(storage.initialWorth/storage.initialPrice).toFixed(8)} #{i._pair[0].toUpperCase()}"
