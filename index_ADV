@@ -7,7 +7,7 @@ Modified by dyndragon
 - Added plotting for MACD and RSI
 Modified by buyTFdip
 -Added multi funtion ordering, also for the Profit book orders
--Added intraday ordering presets
+-Added intraday ordering presets (5min)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -37,9 +37,9 @@ PCT_TO_BOOK = params.add "Percent of holdings to sell when taking profits", 33
 PCT_OF_SPLIT = params.add "Percent iceberg split", 100
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
 ORDER_TYPE = params.addOptions 'Order type', ['market', 'limit', 'iceberg'], 'limit'
-ORDER_PRICE = params.addOptions 'Trade at [Market Price x]', [1.0, 1.002, 1.004], 1.002
+ORDER_PRICE = params.addOptions 'Trade at [Market Price x]..(For Market 1 | Limit 1.002)', [1.0, 1.002], 1.002
 PROFIT_ORDER_TYPE = params.addOptions 'Profit taking order type', ['market', 'limit', 'iceberg'], 'market'
-PROFIT_ORDER_PRICE = params.addOptions 'Take profit at [Market Price x]', [1.0, 1.002, 1.004], 1.0
+PROFIT_ORDER_PRICE = params.addOptions 'Take profit at [Market Price x]..(For Market 1 | Limit 1.002)', [1.0, 1.002], 1.0
 
 init: (context) ->
 
