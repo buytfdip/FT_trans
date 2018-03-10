@@ -6,15 +6,15 @@ trading = require 'trading'
 talib = require 'talib'
 params = require 'params'
 
-NUMBER_OF_DAYS = params.add "Number of days used for calculations", .1
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", .2
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
-CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 10
 PCT_OF_FUNDS = params.add "Percent of funds to use for orders", 100
 PCT_OF_SPLIT = params.add "Percent iceberg split", 100
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .0001
 ORDER_TYPE = params.addOptions 'Order type', ['market', 'limit', 'iceberg'], 'limit'
-ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.005
-STOP_LOSS = params.add 'Stop loss % (0 for none)', 0
+ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.002
+
 init: (context) ->
 
     info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Bot"
@@ -33,9 +33,6 @@ init: (context) ->
             color: 'rgba(39, 174, 96, .25)'
             secondary: true
             size: 5
-        StopLoss:
-	    color: 'black'
-
 
 handle: (context, data) ->
     storage.consecutiveSellSignals ?= 0
@@ -130,64 +127,6 @@ handle: (context, data) ->
                 bulls: 1
 
             minimumCurrency = i.price * MINIMUM_ORDER_VALUE
-            if !storage.sold and STOP_LOSS > 0 and i.price  < storage.lastBuyPrice * (100-STOP_LOSS)/100                
-                currentCurrency = startCurrency
-                currentAssets = startAssets
-
-                totalCurrencyToSpend = startCurrency * (PCT_OF_FUNDS/100)
-                split = (totalCurrencyToSpend * (PCT_OF_SPLIT/100))
-
-                if (split < minimumCurrency)
-                    split = totalCurrencyToSpend
-
-                amountRemaining = totalCurrencyToSpend
-                infLoop = 0
-                while (infLoop++ < 100 and amountRemaining >= minimumCurrency)
-                    startingCurrency = @portfolio.positions[i.curr()].amount
-                    startingAssets = @portfolio.positions[i.asset()].amount
-
-                    ticker = trading.getTicker(i)                    
-                    buyAmount = Math.min((split/ticker.buy)*.995, amountRemaining/ticker.buy)
-                    price = (ticker.buy/ORDER_PRICE)
-                    try
-
-                        trading.sell i, ORDER_TYPE, sellAmount, price, 60 * @config.interval
-                    catch error
-                        if (/insufficient funds/i.exec(error))
-                            currentCurrency = startingCurrency
-                            currentAssets = startingAssets
-                            break
-
-                    sleep(30000)
-                    i.update
-                    currentCurrency = @portfolio.positions[i.curr()].amount
-                    currentAssets = @portfolio.positions[i.asset()].amount
-                    assetDelta = (startingAssets - currentAssets)
-                    if (assetDelta != 0)
-                        currencyDelta = (currentCurrency - startingCurrency)
-                        salePrice = (currencyDelta/assetDelta)
-                        warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-                    amountRemaining -= assetDelta
-
-                totalSold = (startAssets - currentAssets)
-                currencyGain = (currentCurrency - startCurrency)
-                salePrice = currencyGain/totalSold
-                warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-                warn "Finished Selling!"
-                storage.sold = true
-                storage.bought = false
-                storage.consecutiveBuySignals = 0
-                storage.consecutiveSellSignals = 0
-                storage.lastSellPrice = salePrice
-                storage.sells++
-                if (storage.lastBuyPrice != null)
-                    if (salePrice > storage.lastBuyPrice)
-                        storage.wins++
-                    else
-                        storage.losses++
-                plotMark
-                    StopLoss: Stop
-
             if (!storage.bought and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - 2] and _.last(rsi) > rsi[rsi.length - 2])
                 currentCurrency = startCurrency
                 currentAssets = startAssets
@@ -222,13 +161,13 @@ handle: (context, data) ->
                     currencyDelta = (startingCurrency - currentCurrency)
                     if (currencyDelta != 0)
                         assetDelta = (currentAssets - startingAssets)
-                        salePrice = (currencyDelta/assetDelta)
+                        salePrice = (ticker.buy/ORDER_PRICE)
                         info "Bought #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
                     amountRemaining -= currencyDelta
 
                 totalBought = (currentAssets - startAssets)
                 currencySpent = (startCurrency - currentCurrency)
-                salePrice = currencySpent/totalBought
+                salePrice = (ticker.buy/ORDER_PRICE)
                 info "Bought a total of #{totalBought.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
                 info "Finished Buying!"
                 storage.sold = false
@@ -280,13 +219,13 @@ handle: (context, data) ->
                     assetDelta = (startingAssets - currentAssets)
                     if (assetDelta != 0)
                         currencyDelta = (currentCurrency - startingCurrency)
-                        salePrice = (currencyDelta/assetDelta)
+                        salePrice = (ticker.sell*ORDER_PRICE)
                         warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
                     amountRemaining -= assetDelta
 
                 totalSold = (startAssets - currentAssets)
                 currencyGain = (currentCurrency - startCurrency)
-                salePrice = currencyGain/totalSold
+                salePrice = (ticker.sell*ORDER_PRICE)
                 warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
                 warn "Finished Selling!"
                 storage.sold = true
