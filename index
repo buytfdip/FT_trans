@@ -6,14 +6,14 @@ trading = require 'trading'
 talib = require 'talib'
 params = require 'params'
 
-NUMBER_OF_DAYS = params.add "Number of days used for calculations", .1
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", .2
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
-CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 10
 PCT_OF_FUNDS = params.add "Percent of funds to use for orders", 100
 PCT_OF_SPLIT = params.add "Percent iceberg split", 100
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .0001
 ORDER_TYPE = params.addOptions 'Order type', ['market', 'limit', 'iceberg'], 'limit'
-ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.005
+ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.002
 
 init: (context) ->
 
@@ -161,13 +161,13 @@ handle: (context, data) ->
                     currencyDelta = (startingCurrency - currentCurrency)
                     if (currencyDelta != 0)
                         assetDelta = (currentAssets - startingAssets)
-                        salePrice = (currencyDelta/assetDelta)
+                        salePrice = (ticker.buy/ORDER_PRICE)
                         info "Bought #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
                     amountRemaining -= currencyDelta
 
                 totalBought = (currentAssets - startAssets)
                 currencySpent = (startCurrency - currentCurrency)
-                salePrice = currencySpent/totalBought
+                salePrice = (ticker.buy/ORDER_PRICE)
                 info "Bought a total of #{totalBought.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
                 info "Finished Buying!"
                 storage.sold = false
@@ -219,13 +219,13 @@ handle: (context, data) ->
                     assetDelta = (startingAssets - currentAssets)
                     if (assetDelta != 0)
                         currencyDelta = (currentCurrency - startingCurrency)
-                        salePrice = (currencyDelta/assetDelta)
+                        salePrice = (ticker.sell*ORDER_PRICE)
                         warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
                     amountRemaining -= assetDelta
 
                 totalSold = (startAssets - currentAssets)
                 currencyGain = (currentCurrency - startCurrency)
-                salePrice = currencyGain/totalSold
+                salePrice = (ticker.sell*ORDER_PRICE)
                 warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
                 warn "Finished Selling!"
                 storage.sold = true
