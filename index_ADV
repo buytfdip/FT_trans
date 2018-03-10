@@ -7,6 +7,7 @@ Modified by dyndragon
 - Added plotting for MACD and RSI
 Modified by buyTFdip
 -Added multi funtion ordering
+-Added intraday ordering presets
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -26,9 +27,9 @@ trading = require 'trading'
 talib = require 'talib'
 params = require 'params'
 
-NUMBER_OF_DAYS = params.add "Number of days used for calculations", 3
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", .2
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
-CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 10
 PCT_OF_FUNDS_BUY = params.add "Percent of funds to use for buy orders", 100
 PCT_OF_ASSETS_SELL = params.add "Percent of assets to use for sell orders", 100
 BOOK_PROFIT_PCT = params.add "Percent gain before taking profits (set to 0 to disable)", 0
