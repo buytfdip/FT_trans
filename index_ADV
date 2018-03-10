@@ -29,17 +29,17 @@ params = require 'params'
 
 NUMBER_OF_DAYS = params.add "Number of days used for calculations", 3
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
-CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 5
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 10
 PCT_OF_FUNDS_BUY = params.add "Percent of funds to use for buy orders", 100
 PCT_OF_ASSETS_SELL = params.add "Percent of assets to use for sell orders", 100
 BOOK_PROFIT_PCT = params.add "Percent gain before taking profits (set to 0 to disable)", 15
-PCT_TO_BOOK = params.add "Percent of holdings to sell when booking profits", 33
+PCT_TO_BOOK = params.add "Percent of holdings to sell when booking profits", 66
 PCT_OF_SPLIT = params.add "Percent iceberg split", 100
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
 ORDER_TYPE = params.addOptions 'Global order type', ['market', 'limit', 'iceberg'], 'limit'
 ORDER_PRICE = params.add 'Global trades at [Market Price x]', 1.002
-ORDER_TYPE2 = params.addOptions 'Profit taking order type', ['market', 'limit', 'iceberg'], 'market'
-ORDER_PRICE2 = params.add 'Profit taking trades at [Market Price x]', 1
+ORDER_TYPE2 = params.addOptions 'Profit taking order type', ['market', 'limit', 'iceberg'], 'limit'
+ORDER_PRICE2 = params.add 'Profit taking trades at [Market Price x]', 1.002
 
 init: (context) ->
 
@@ -48,11 +48,11 @@ init: (context) ->
 
     setPlotOptions
         bought:
-            color: 'rgba(46, 204, 113, .80)'
+            color: 'rgba(29, 245, 29, .80)'
         sold:
             color: 'rgba(231, 76, 60, .80)'
         bookProfit:
-            color: 'rgba(253, 98, 206, .80)'
+            color: 'rgba(253, 88, 250, .80)'
         bears:
             color: 'rgba(192, 57, 43, .15)'
             secondary: false
