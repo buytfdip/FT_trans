@@ -6,7 +6,7 @@ Modified by dyndragon
 - Added debug output for MACD Signal and RSI
 - Added plotting for MACD and RSI
 Modified by buyTFdip
--Added multi funtion ordering
+-Added multi funtion ordering, also for the Profit book orders
 -Added intraday ordering presets
 
 This program is free software: you can redistribute it and/or modify
@@ -32,16 +32,18 @@ CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
 CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 10
 PCT_OF_FUNDS_BUY = params.add "Percent of funds to use for buy orders", 100
 PCT_OF_ASSETS_SELL = params.add "Percent of assets to use for sell orders", 100
-BOOK_PROFIT_PCT = params.add "Percent gain before taking profits (set to 0 to disable)", 10
-PCT_TO_BOOK = params.add "Percent of holdings to sell when booking profits", 50
-PCT_OF_SPLIT = params.add "Percent iceberg split", 25
+BOOK_PROFIT_PCT = params.add "Percent gain before taking profits (set to 0 to disable)", 15
+PCT_TO_BOOK = params.add "Percent of holdings to sell when booking profits", 33
+PCT_OF_SPLIT = params.add "Percent iceberg split", 100
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
 ORDER_TYPE = params.addOptions 'Order type', ['market', 'limit', 'iceberg'], 'limit'
-ORDER_PRICE = params.add 'Trade at [Market Price x]', 1.002
+PROFIT_ORDER_TYPE = params.addOptions 'Profit book order type', ['market', 'limit', 'iceberg'], 'market'
+ORDER_PRICE = params.add 'Trade at [Market Price x]', [1, 1.002, 1.004], 1.002
+PROFIT_ORDER_PRICE = params.add 'Trade at [Market Price x]', [1, 1.002, 1.004], 1.002
 
 init: (context) ->
 
-    info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Bot By DiSTANT"
+    info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform"
     info "Please be patient while the bot waits for a signal"
 
     setPlotOptions
@@ -262,7 +264,7 @@ handle: (context, data) ->
 
                 totalSold = (startAssets - currentAssets)
                 currencyGain = (currentCurrency - startCurrency)
-                salePrice = currencyGain/totalSold
+                salePrice = (ticker.sell*ORDER_PRICE)
                 warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
                 warn "Finished Selling!"
                 storage.sold = true
@@ -299,9 +301,10 @@ handle: (context, data) ->
                 startingAssets = @portfolio.positions[i.asset()].amount
 
                 ticker = trading.getTicker(i)
-                sellAmount = Math.min(split*.9975, amountRemaining)
+                sellAmount = Math.min(split*.99, amountRemaining)
+                price = (ticker.sell*PROFIT_ORDER_PRICE)
                 try
-                    trading.sell i, 'market', sellAmount
+                    trading.sell i, PROFIT_ORDER_TYPE, sellAmount, price, 60 * @config.interval
                 catch error
                     if (/insufficient funds/i.exec(error))
                         currentCurrency = startingCurrency
@@ -315,13 +318,13 @@ handle: (context, data) ->
                 assetDelta = (startingAssets - currentAssets)
                 if (assetDelta != 0)
                     currencyDelta = (currentCurrency - startingCurrency)
-                    salePrice = (currencyDelta/assetDelta)
+                    salePrice = (ticker.sell*PROFIT_ORDER_PRICE)
                     warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
                 amountRemaining -= assetDelta
 
             totalSold = (startAssets - currentAssets)
             currencyGain = (currentCurrency - startCurrency)
-            salePrice = currencyGain/totalSold
+            salePrice = (ticker.sell*PROFIT_ORDER_PRICE)
             warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
             warn "Finished Selling!"
             storage.lastSellPrice = salePrice
@@ -341,10 +344,10 @@ handle: (context, data) ->
     marketPL = ((currentPrice - storage.initialPrice)/storage.initialPrice) * 100
 
     info "---------- #{NUMBER_OF_DAYS}-Day Fisher Transform By DiSTANT ----------"
-    info "_.last(s): #{_.last(s)} s[s.length - 2]: #{s[s.length - 2]}"
+    info "MACD Signal: #{_.last(s)} s[s.length - 2]: #{s[s.length - 2]}"
     plot
         macdSignal: _.last(s)
-    info "_.last(rsi): #{_.last(rsi)} rsi[rsi.length - 2]: #{rsi[rsi.length - 2]}"
+    info "RSI Reading: #{_.last(rsi)} rsi[rsi.length - 2]: #{rsi[rsi.length - 2]}"
     plot
         rsiSignal: _.last(rsi)
     info "Current Price: #{currentPrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
