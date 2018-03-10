@@ -38,8 +38,8 @@ PCT_OF_SPLIT = params.add "Percent iceberg split", 100
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
 ORDER_TYPE = params.addOptions 'Order type', ['market', 'limit', 'iceberg'], 'limit'
 PROFIT_ORDER_TYPE = params.addOptions 'Profit book order type', ['market', 'limit', 'iceberg'], 'market'
-ORDER_PRICE = params.add 'Trade at [Market Price x]', [1, 1.002, 1.004], 1.002
-PROFIT_ORDER_PRICE = params.add 'Trade at [Market Price x]', [1, 1.002, 1.004], 1.002
+ORDER_PRICE = params.addOptions 'Trade at [Market Price x]', [1.0, 1.002, 1.004], 1.002
+PROFIT_ORDER_PRICE = params.addOptions 'Take Profit at [Market Price x]', [1.0, 1.002, 1.004], 1.0
 
 init: (context) ->
 
@@ -343,7 +343,7 @@ handle: (context, data) ->
     botPL = ((currentWorth - storage.initialWorth)/storage.initialWorth) * 100
     marketPL = ((currentPrice - storage.initialPrice)/storage.initialPrice) * 100
 
-    info "---------- #{NUMBER_OF_DAYS}-Day Fisher Transform By DiSTANT ----------"
+    info "---------- #{NUMBER_OF_DAYS}-Day Fisher Transform ----------"
     info "MACD Signal: #{_.last(s)} s[s.length - 2]: #{s[s.length - 2]}"
     plot
         macdSignal: _.last(s)
