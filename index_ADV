@@ -52,7 +52,7 @@ init: (context) ->
         sold:
             color: 'rgba(231, 76, 60, .80)'
         bookProfit:
-            color: 'rgba(229, 114, 0, .80)'
+            color: 'rgba(253, 98, 206, .80)'
         bears:
             color: 'rgba(192, 57, 43, .15)'
             secondary: false
