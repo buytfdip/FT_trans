@@ -377,9 +377,6 @@ handle: (context, data) ->
             plotMark
                 bookProfit: salePrice
             storage.profitsbooked = true
-            storage.profitsbooked2 = false
-            storage.sold = false
-            storage.bought = false
 
     storage.lastFisher = fisher
 
