@@ -11,14 +11,14 @@ BOOK_PROFIT_PCT = params.add "% gain before taking 1st profits (set to 0 to disa
 BOOK_PROFIT_PCT2 = params.add "% gain before taking 2nd profits (set to 0 to disable)", 25
 PCT_TO_BOOK = params.add "% of holdings to sell when booking 1st profits", 40
 PCT_TO_BOOK2 = params.add "% of holdings to sell when booking 2nd profits", 45
-STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 5
+STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 15
 PCT_OF_SPLIT = params.add "% iceberg split", 100
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
 ORDER_TYPE = params.addOptions 'Global order type', ['market', 'limit', 'iceberg'], 'limit'
 ORDER_PRICE = params.add 'Global trades at [Market Price x]', 1.002
 ORDER_TYPE2 = params.addOptions 'Profit taking order type', ['market', 'limit', 'iceberg'], 'limit'
-ORDER_TYPE3 = params.addOptions 'Profit taking order type', ['market', 'limit', 'iceberg'], 'market'
 ORDER_PRICE2 = params.add 'Profit taking trades at [Market Price x]', 1.002
+ORDER_TYPE3 = params.addOptions 'Stop loss order type', ['market', 'limit', 'iceberg'], 'market'
 ORDER_PRICE3 = params.add 'Stop loss trades at [Market Price x]', 1
 
 init: (context) ->
@@ -388,7 +388,7 @@ handle: (context, data) ->
           else
             storage.consecutiveBuySignals = 0
             storage.consecutiveSellSignals = 0
-          if (STOP_LOSS_PCT > 0 and storage.bought and !storage.stoploss and (storage.lastBuyPrice *( 1 - (STOP_LOSS_PCT/100))) <= i.price)
+          if (STOP_LOSS_PCT > 0 and storage.bought and !storage.stoploss and (storage.lastBuyPrice *( (STOP_LOSS_PCT/100)-1)) <= i.price)
             info "Stop loss initiated!"
             currentCurrency = startCurrency
             currentAssets = startAssets
