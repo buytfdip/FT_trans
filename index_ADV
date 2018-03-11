@@ -388,7 +388,7 @@ handle: (context, data) ->
           else
             storage.consecutiveBuySignals = 0
             storage.consecutiveSellSignals = 0
-          if (STOP_LOSS_PCT > 0 and storage.bought and !storage.stoploss and (storage.lastBuyPrice *( (STOP_LOSS_PCT/100)-1)) <= i.price)
+          if (STOP_LOSS_PCT > 0 and storage.bought and !storage.stoploss and (storage.lastBuyPrice /( 1 + (STOP_LOSS_PCT/100))) >= i.price)
             info "Stop loss initiated!"
             currentCurrency = startCurrency
             currentAssets = startAssets
