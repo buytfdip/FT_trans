@@ -8,18 +8,18 @@ CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 10
 PCT_OF_FUNDS_BUY = params.add "% of funds to use for buy orders", 100
 PCT_OF_ASSETS_SELL = params.add "% of assets to use for sell orders", 100
 BOOK_PROFIT_PCT = params.add "% gain before taking 1st profits (set to 0 to disable)", 5
-BOOK_PROFIT_PCT2 = params.add "% gain before taking 2nd profits (set to 0 to disable)", 15
-BOOK_PROFIT_PCT3 = params.add "% gain before taking 3rd profits (set to 0 to disable)", 22.5
-BOOK_PROFIT_PCT4 = params.add "% gain before taking 4th profits (set to 0 to disable)", 27
+BOOK_PROFIT_PCT2 = params.add "% gain before taking 2nd profits (set to 0 to disable)", 10
+BOOK_PROFIT_PCT3 = params.add "% gain before taking 3rd profits (set to 0 to disable)", 17.5
+BOOK_PROFIT_PCT4 = params.add "% gain before taking 4th profits (set to 0 to disable)", 22.5
 BOOK_PROFIT_PCT5 = params.add "% gain before taking 5th profits (set to 0 to disable)", 32.5
-BOOK_PROFIT_PCT6 = params.add "% gain before taking 6th profits (set to 0 to disable)", 45
-PCT_TO_BOOK = params.add "% of holdings to sell when booking 1st profits", 15
+BOOK_PROFIT_PCT6 = params.add "% gain before taking 6th profits (set to 0 to disable)", 40
+PCT_TO_BOOK = params.add "% of holdings to sell when booking 1st profits", 25
 PCT_TO_BOOK2 = params.add "% of holdings to sell when booking 2nd profits", 30
-PCT_TO_BOOK3 = params.add "% of holdings to sell when booking 3rd profits", 40
-PCT_TO_BOOK4 = params.add "% of holdings to sell when booking 4th profits", 60
-PCT_TO_BOOK5 = params.add "% of holdings to sell when booking 5th profits", 75
+PCT_TO_BOOK3 = params.add "% of holdings to sell when booking 3rd profits", 35
+PCT_TO_BOOK4 = params.add "% of holdings to sell when booking 4th profits", 45
+PCT_TO_BOOK5 = params.add "% of holdings to sell when booking 5th profits", 55
 PCT_TO_BOOK6 = params.add "% of holdings to sell when booking 6th profits", 100
-STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 7.5
+STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 15
 PCT_OF_SPLIT = params.add "% iceberg split", 100
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
 ORDER_TYPE = params.addOptions 'Buy order type', ['market', 'limit', 'iceberg'], 'limit'
@@ -37,8 +37,9 @@ init: (context) ->
     setPlotOptions
         bought:
             color: 'rgb(51, 204, 51)'
+#
         sold:
-            color: 'rgb(179, 0, 0)'
+            color: 'rgb(128, 0, 0)'
 #profit plots
         bookProfit:
             color: 'rgb(255, 204, 153)'
@@ -54,6 +55,7 @@ init: (context) ->
             color: 'rgb(179, 0, 0)'
         stopLoss:
             color: 'rgb(13, 13, 13)'
+
         bears:
             color: 'rgba(192, 57, 43, .15)'
             secondary: false
@@ -239,7 +241,7 @@ handle: (context, data) ->
             plotMark
                 bears: _.last(i.low) * 0.97
 # sell sequence  
-            if (!storage.sold and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - 2] and _.last(rsi) < rsi[rsi.length - 2])
+            if (!storage.sold and storage.profitsbooked and storage.profitsbooked2 and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - 2] and _.last(rsi) < rsi[rsi.length - 2])
                 currentCurrency = startCurrency
                 currentAssets = startAssets
 
@@ -285,6 +287,13 @@ handle: (context, data) ->
                 storage.sold = true
                 storage.bought = false
                 storage.stoploss = false
+# pt storage
+                storage.profitsbooked = false
+                storage.profitsbooked2 = false
+                storage.profitsbooked3 = false
+                storage.profitsbooked4 = false
+                storage.profitsbooked5 = false
+                storage.profitsbooked6 = false
                 storage.consecutiveBuySignals = 0
                 storage.consecutiveSellSignals = 0
                 storage.lastSellPrice = salePrice
@@ -538,7 +547,7 @@ handle: (context, data) ->
                 bookProfit4: salePrice
             storage.profitsbooked4 = true            
             storage.sold = false
-            storage.bought = true
+            storage.bought = false
             storage.stoploss = false
 #profit take 5
         else
@@ -597,7 +606,6 @@ handle: (context, data) ->
                     storage.losses++
             plotMark
                 bookProfit5: salePrice
-#storage
             storage.profitsbooked5 = true            
             storage.sold = false
             storage.bought = true
@@ -606,7 +614,7 @@ handle: (context, data) ->
         else
             storage.consecutiveBuySignals = 0
             storage.consecutiveSellSignals = 0
-        if (BOOK_PROFIT_PCT6 > 0 and storage.bought and !storage.profitsbooked6 and (storage.lastBuyPrice *( 1 + (BOOK_PROFIT_PCT6/100))) <= i.price)
+        if (BOOK_PROFIT_PCT6 > 0 and storage.bought and !storage.profitsbooked5 and (storage.lastBuyPrice *( 1 + (BOOK_PROFIT_PCT6/100))) <= i.price)
             info "Time to book profits!"
             currentCurrency = startCurrency
             currentAssets = startAssets
@@ -660,7 +668,7 @@ handle: (context, data) ->
             plotMark
                 bookProfit6: salePrice
             storage.profitsbooked6 = true            
-            storage.sold = false
+            storage.sold = true
             storage.bought = true
             storage.stoploss = false
 #stop loss
