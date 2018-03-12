@@ -7,15 +7,23 @@ CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
 CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 10
 PCT_OF_FUNDS_BUY = params.add "% of funds to use for buy orders", 100
 PCT_OF_ASSETS_SELL = params.add "% of assets to use for sell orders", 100
-BOOK_PROFIT_PCT = params.add "% gain before taking 1st profits (set to 0 to disable)", 15
-BOOK_PROFIT_PCT2 = params.add "% gain before taking 2nd profits (set to 0 to disable)", 25
-PCT_TO_BOOK = params.add "% of holdings to sell when booking 1st profits", 40
-PCT_TO_BOOK2 = params.add "% of holdings to sell when booking 2nd profits", 45
-STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 15
+BOOK_PROFIT_PCT = params.add "% gain before taking 1st profits (set to 0 to disable)", 5
+BOOK_PROFIT_PCT2 = params.add "% gain before taking 2nd profits (set to 0 to disable)", 15
+BOOK_PROFIT_PCT3 = params.add "% gain before taking 3rd profits (set to 0 to disable)", 22.5
+BOOK_PROFIT_PCT4 = params.add "% gain before taking 4th profits (set to 0 to disable)", 27
+BOOK_PROFIT_PCT5 = params.add "% gain before taking 5th profits (set to 0 to disable)", 32.5
+BOOK_PROFIT_PCT6 = params.add "% gain before taking 6th profits (set to 0 to disable)", 45
+PCT_TO_BOOK = params.add "% of holdings to sell when booking 1st profits", 15
+PCT_TO_BOOK2 = params.add "% of holdings to sell when booking 2nd profits", 30
+PCT_TO_BOOK3 = params.add "% of holdings to sell when booking 3rd profits", 40
+PCT_TO_BOOK4 = params.add "% of holdings to sell when booking 4th profits", 60
+PCT_TO_BOOK5 = params.add "% of holdings to sell when booking 5th profits", 75
+PCT_TO_BOOK6 = params.add "% of holdings to sell when booking 6th profits", 100
+STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 7.5
 PCT_OF_SPLIT = params.add "% iceberg split", 100
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
-ORDER_TYPE = params.addOptions 'Global order type', ['market', 'limit', 'iceberg'], 'limit'
-ORDER_PRICE = params.add 'Global trades at [Market Price x]', 1.002
+ORDER_TYPE = params.addOptions 'Buy order type', ['market', 'limit', 'iceberg'], 'limit'
+ORDER_PRICE = params.add 'Buys at [Market Price x]', 1.002
 ORDER_TYPE2 = params.addOptions 'Profit taking order type', ['market', 'limit', 'iceberg'], 'limit'
 ORDER_PRICE2 = params.add 'Profit taking trades at [Market Price x]', 1.002
 ORDER_TYPE3 = params.addOptions 'Stop loss order type', ['market', 'limit', 'iceberg'], 'market'
@@ -25,18 +33,27 @@ init: (context) ->
 
     info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Bot + RSI/MACD"
     info "Please be patient while the bot waits for a signal"
-
+#plot
     setPlotOptions
         bought:
-            color: 'rgba(29, 245, 29, .80)'
+            color: 'rgb(51, 204, 51)'
         sold:
-            color: 'rgba(250, 15, 19, .80)'
+            color: 'rgb(179, 0, 0)'
+#profit plots
         bookProfit:
-            color: 'rgba(253, 88, 250, .80)'
+            color: 'rgb(255, 204, 153)'
         bookProfit2:
-            color: 'rgba(249, 51, 153, .80)'
+            color: 'rgb(255, 179, 102)'
+        bookProfit3:
+            color: 'rgb(255, 136, 77)'
+        bookProfit4:
+            color: 'rgb(255, 85, 0)'
+        bookProfit5:
+            color: 'rgb(255, 0, 0)'
+        bookProfit6:
+            color: 'rgb(179, 0, 0)'
         stopLoss:
-            color: 'rgba(0, 0, 0, .80)'
+            color: 'rgb(13, 13, 13)'
         bears:
             color: 'rgba(192, 57, 43, .15)'
             secondary: false
@@ -67,6 +84,10 @@ handle: (context, data) ->
     storage.bought ?= false
     storage.profitsbooked ?= false
     storage.profitsbooked2 ?= false
+    storage.profitsbooked3 ?= false
+    storage.profitsbooked4 ?= false
+    storage.profitsbooked5 ?= false 
+    storage.profitsbooked6 ?= false
     storage.stoploss ?= false
     storage.lastBuyPrice ?= null
     storage.lastValue ?= null
@@ -151,6 +172,7 @@ handle: (context, data) ->
                 bulls: _.last(i.high) * 1.03
 
             minimumCurrency = i.price * MINIMUM_ORDER_VALUE
+#buy sequence
             if (!storage.bought and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - 2] and _.last(rsi) > rsi[rsi.length - 2])
                 currentCurrency = startCurrency
                 currentAssets = startAssets
@@ -196,8 +218,14 @@ handle: (context, data) ->
                 info "Finished Buying!"
                 storage.sold = false
                 storage.bought = true
-                storage.profitsbooked2 = false
+                storage.stoploss = false
+# pt storage
                 storage.profitsbooked = false
+                storage.profitsbooked2 = false
+                storage.profitsbooked3 = false
+                storage.profitsbooked4 = false
+                storage.profitsbooked5 = false
+                storage.profitsbooked6 = false
                 storage.consecutiveBuySignals = 0
                 storage.consecutiveSellSignals = 0
                 storage.lastBuyPrice = salePrice
@@ -210,7 +238,8 @@ handle: (context, data) ->
             storage.consecutiveBuySignals = 0
             plotMark
                 bears: _.last(i.low) * 0.97
-            if (!storage.sold and storage.profitsbooked and storage.profitsbooked2 and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - 2] and _.last(rsi) < rsi[rsi.length - 2])
+# sell sequence  
+            if (!storage.sold and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - 2] and _.last(rsi) < rsi[rsi.length - 2])
                 currentCurrency = startCurrency
                 currentAssets = startAssets
 
@@ -255,8 +284,7 @@ handle: (context, data) ->
                 warn "Finished Selling!"
                 storage.sold = true
                 storage.bought = false
-                storage.profitsbooked = false
-                storage.profitsbooked2 = false
+                storage.stoploss = false
                 storage.consecutiveBuySignals = 0
                 storage.consecutiveSellSignals = 0
                 storage.lastSellPrice = salePrice
@@ -268,66 +296,7 @@ handle: (context, data) ->
                         storage.losses++
                 plotMark
                     sold: salePrice
-        else
-            storage.consecutiveBuySignals = 0
-            storage.consecutiveSellSignals = 0
-        if (BOOK_PROFIT_PCT2 > 0 and storage.bought and storage.profitsbooked and !storage.profitsbooked2 and (storage.lastBuyPrice *( 1 + (BOOK_PROFIT_PCT2/100))) <= i.price)
-            info "Time to book second profits!"
-            currentCurrency = startCurrency
-            currentAssets = startAssets
-
-            totalAssetsToSell = startAssets * (PCT_TO_BOOK2/100)
-            split = (totalAssetsToSell * (PCT_OF_SPLIT/100))
-
-            if (split < MINIMUM_ORDER_VALUE)
-                split = totalAssetsToSell
-
-            amountRemaining = totalAssetsToSell
-            infLoop = 0
-            while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
-                startingCurrency = @portfolio.positions[i.curr()].amount
-                startingAssets = @portfolio.positions[i.asset()].amount
-
-                ticker = trading.getTicker(i)
-                sellAmount = Math.min(split*.9975, amountRemaining)
-                price = (ticker.sell*ORDER_PRICE2)
-                try
-                    trading.sell i, ORDER_TYPE2, sellAmount, price, 60 * @config.interval
-                catch error
-                    if (/insufficient funds/i.exec(error))
-                        currentCurrency = startingCurrency
-                        currentAssets = startingAssets
-                        break
-
-                sleep(30000)
-                i.update
-                currentCurrency = @portfolio.positions[i.curr()].amount
-                currentAssets = @portfolio.positions[i.asset()].amount
-                assetDelta = (startingAssets - currentAssets)
-                if (assetDelta != 0)
-                    currencyDelta = (currentCurrency - startingCurrency)
-                    salePrice = (ticker.sell*ORDER_PRICE2)
-                    warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-                amountRemaining -= assetDelta
-
-            totalSold = (startAssets - currentAssets)
-            currencyGain = (currentCurrency - startCurrency)
-            salePrice = (ticker.sell*ORDER_PRICE2)
-            warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-            warn "Finished Selling!"
-            storage.lastSellPrice = salePrice
-            storage.sells++
-            if (storage.lastBuyPrice != null)
-                if (salePrice > storage.lastBuyPrice)
-                    storage.wins++
-                else
-                    storage.losses++
-            plotMark
-                bookProfit2: salePrice
-            storage.profitsbooked = true
-            storage.profitsbooked2 = true
-            storage.sold = false
-            storage.bought = false
+#profit take 1
         else
             storage.consecutiveBuySignals = 0
             storage.consecutiveSellSignals = 0
@@ -384,7 +353,317 @@ handle: (context, data) ->
                     storage.losses++
             plotMark
                 bookProfit: salePrice
-            storage.profitsbooked = true
+            storage.profitsbooked = true            
+            storage.sold = false
+            storage.bought = true
+            storage.stoploss = false
+#profit take 2
+        else
+            storage.consecutiveBuySignals = 0
+            storage.consecutiveSellSignals = 0
+        if (BOOK_PROFIT_PCT2 > 0 and storage.bought and !storage.profitsbooked2 and (storage.lastBuyPrice *( 1 + (BOOK_PROFIT_PCT2/100))) <= i.price)
+            info "Time to book profits!"
+            currentCurrency = startCurrency
+            currentAssets = startAssets
+
+            totalAssetsToSell = startAssets * (PCT_TO_BOOK2/100)
+            split = (totalAssetsToSell * (PCT_OF_SPLIT/100))
+
+            if (split < MINIMUM_ORDER_VALUE)
+                split = totalAssetsToSell
+
+            amountRemaining = totalAssetsToSell
+            infLoop = 0
+            while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
+                startingCurrency = @portfolio.positions[i.curr()].amount
+                startingAssets = @portfolio.positions[i.asset()].amount
+
+                ticker = trading.getTicker(i)
+                sellAmount = Math.min(split*.99, amountRemaining)
+                price = (ticker.sell*ORDER_PRICE2)
+                try
+                    trading.sell i, ORDER_TYPE2, sellAmount, price, 60 * @config.interval
+                catch error
+                    if (/insufficient funds/i.exec(error))
+                        currentCurrency = startingCurrency
+                        currentAssets = startingAssets
+                        break
+
+                sleep(30000)
+                i.update
+                currentCurrency = @portfolio.positions[i.curr()].amount
+                currentAssets = @portfolio.positions[i.asset()].amount
+                assetDelta = (startingAssets - currentAssets)
+                if (assetDelta != 0)
+                    currencyDelta = (currentCurrency - startingCurrency)
+                    salePrice = (ticker.sell*ORDER_PRICE2)
+                    warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+                amountRemaining -= assetDelta
+
+            totalSold = (startAssets - currentAssets)
+            currencyGain = (currentCurrency - startCurrency)
+            salePrice = (ticker.sell*ORDER_PRICE2)
+            warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+            warn "Finished Selling!"
+            storage.lastSellPrice = salePrice
+            storage.sells++
+            if (storage.lastBuyPrice != null)
+                if (salePrice > storage.lastBuyPrice)
+                    storage.wins++
+                else
+                    storage.losses++
+            plotMark
+                bookProfit2: salePrice
+            storage.profitsbooked2 = true            
+            storage.sold = false
+            storage.bought = true
+            storage.stoploss = false
+#profit take 3
+        else
+            storage.consecutiveBuySignals = 0
+            storage.consecutiveSellSignals = 0
+        if (BOOK_PROFIT_PCT3 > 0 and storage.bought and !storage.profitsbooked3 and (storage.lastBuyPrice *( 1 + (BOOK_PROFIT_PCT3/100))) <= i.price)
+            info "Time to book profits!"
+            currentCurrency = startCurrency
+            currentAssets = startAssets
+
+            totalAssetsToSell = startAssets * (PCT_TO_BOOK3/100)
+            split = (totalAssetsToSell * (PCT_OF_SPLIT/100))
+
+            if (split < MINIMUM_ORDER_VALUE)
+                split = totalAssetsToSell
+
+            amountRemaining = totalAssetsToSell
+            infLoop = 0
+            while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
+                startingCurrency = @portfolio.positions[i.curr()].amount
+                startingAssets = @portfolio.positions[i.asset()].amount
+
+                ticker = trading.getTicker(i)
+                sellAmount = Math.min(split*.99, amountRemaining)
+                price = (ticker.sell*ORDER_PRICE2)
+                try
+                    trading.sell i, ORDER_TYPE2, sellAmount, price, 60 * @config.interval
+                catch error
+                    if (/insufficient funds/i.exec(error))
+                        currentCurrency = startingCurrency
+                        currentAssets = startingAssets
+                        break
+
+                sleep(30000)
+                i.update
+                currentCurrency = @portfolio.positions[i.curr()].amount
+                currentAssets = @portfolio.positions[i.asset()].amount
+                assetDelta = (startingAssets - currentAssets)
+                if (assetDelta != 0)
+                    currencyDelta = (currentCurrency - startingCurrency)
+                    salePrice = (ticker.sell*ORDER_PRICE2)
+                    warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+                amountRemaining -= assetDelta
+
+            totalSold = (startAssets - currentAssets)
+            currencyGain = (currentCurrency - startCurrency)
+            salePrice = (ticker.sell*ORDER_PRICE2)
+            warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+            warn "Finished Selling!"
+            storage.lastSellPrice = salePrice
+            storage.sells++
+            if (storage.lastBuyPrice != null)
+                if (salePrice > storage.lastBuyPrice)
+                    storage.wins++
+                else
+                    storage.losses++
+            plotMark
+                bookProfit3: salePrice
+            storage.profitsbooked3 = true            
+            storage.sold = false
+            storage.bought = true
+            storage.stoploss = false
+#profit take 4
+        else
+            storage.consecutiveBuySignals = 0
+            storage.consecutiveSellSignals = 0
+        if (BOOK_PROFIT_PCT4 > 0 and storage.bought and !storage.profitsbooked4 and (storage.lastBuyPrice *( 1 + (BOOK_PROFIT_PCT4/100))) <= i.price)
+            info "Time to book profits!"
+            currentCurrency = startCurrency
+            currentAssets = startAssets
+
+            totalAssetsToSell = startAssets * (PCT_TO_BOOK4/100)
+            split = (totalAssetsToSell * (PCT_OF_SPLIT/100))
+
+            if (split < MINIMUM_ORDER_VALUE)
+                split = totalAssetsToSell
+
+            amountRemaining = totalAssetsToSell
+            infLoop = 0
+            while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
+                startingCurrency = @portfolio.positions[i.curr()].amount
+                startingAssets = @portfolio.positions[i.asset()].amount
+
+                ticker = trading.getTicker(i)
+                sellAmount = Math.min(split*.99, amountRemaining)
+                price = (ticker.sell*ORDER_PRICE2)
+                try
+                    trading.sell i, ORDER_TYPE2, sellAmount, price, 60 * @config.interval
+                catch error
+                    if (/insufficient funds/i.exec(error))
+                        currentCurrency = startingCurrency
+                        currentAssets = startingAssets
+                        break
+
+                sleep(30000)
+                i.update
+                currentCurrency = @portfolio.positions[i.curr()].amount
+                currentAssets = @portfolio.positions[i.asset()].amount
+                assetDelta = (startingAssets - currentAssets)
+                if (assetDelta != 0)
+                    currencyDelta = (currentCurrency - startingCurrency)
+                    salePrice = (ticker.sell*ORDER_PRICE2)
+                    warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+                amountRemaining -= assetDelta
+
+            totalSold = (startAssets - currentAssets)
+            currencyGain = (currentCurrency - startCurrency)
+            salePrice = (ticker.sell*ORDER_PRICE2)
+            warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+            warn "Finished Selling!"
+            storage.lastSellPrice = salePrice
+            storage.sells++
+            if (storage.lastBuyPrice != null)
+                if (salePrice > storage.lastBuyPrice)
+                    storage.wins++
+                else
+                    storage.losses++
+            plotMark
+                bookProfit4: salePrice
+            storage.profitsbooked4 = true            
+            storage.sold = false
+            storage.bought = true
+            storage.stoploss = false
+#profit take 5
+        else
+            storage.consecutiveBuySignals = 0
+            storage.consecutiveSellSignals = 0
+        if (BOOK_PROFIT_PCT5 > 0 and storage.bought and !storage.profitsbooked5 and (storage.lastBuyPrice *( 1 + (BOOK_PROFIT_PCT5/100))) <= i.price)
+            info "Time to book profits!"
+            currentCurrency = startCurrency
+            currentAssets = startAssets
+
+            totalAssetsToSell = startAssets * (PCT_TO_BOOK5/100)
+            split = (totalAssetsToSell * (PCT_OF_SPLIT/100))
+
+            if (split < MINIMUM_ORDER_VALUE)
+                split = totalAssetsToSell
+
+            amountRemaining = totalAssetsToSell
+            infLoop = 0
+            while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
+                startingCurrency = @portfolio.positions[i.curr()].amount
+                startingAssets = @portfolio.positions[i.asset()].amount
+
+                ticker = trading.getTicker(i)
+                sellAmount = Math.min(split*.99, amountRemaining)
+                price = (ticker.sell*ORDER_PRICE2)
+                try
+                    trading.sell i, ORDER_TYPE2, sellAmount, price, 60 * @config.interval
+                catch error
+                    if (/insufficient funds/i.exec(error))
+                        currentCurrency = startingCurrency
+                        currentAssets = startingAssets
+                        break
+
+                sleep(30000)
+                i.update
+                currentCurrency = @portfolio.positions[i.curr()].amount
+                currentAssets = @portfolio.positions[i.asset()].amount
+                assetDelta = (startingAssets - currentAssets)
+                if (assetDelta != 0)
+                    currencyDelta = (currentCurrency - startingCurrency)
+                    salePrice = (ticker.sell*ORDER_PRICE2)
+                    warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+                amountRemaining -= assetDelta
+
+            totalSold = (startAssets - currentAssets)
+            currencyGain = (currentCurrency - startCurrency)
+            salePrice = (ticker.sell*ORDER_PRICE2)
+            warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+            warn "Finished Selling!"
+            storage.lastSellPrice = salePrice
+            storage.sells++
+            if (storage.lastBuyPrice != null)
+                if (salePrice > storage.lastBuyPrice)
+                    storage.wins++
+                else
+                    storage.losses++
+            plotMark
+                bookProfit5: salePrice
+#storage
+            storage.profitsbooked5 = true            
+            storage.sold = false
+            storage.bought = true
+            storage.stoploss = false
+#profit take 6
+        else
+            storage.consecutiveBuySignals = 0
+            storage.consecutiveSellSignals = 0
+        if (BOOK_PROFIT_PCT6 > 0 and storage.bought and !storage.profitsbooked6 and (storage.lastBuyPrice *( 1 + (BOOK_PROFIT_PCT6/100))) <= i.price)
+            info "Time to book profits!"
+            currentCurrency = startCurrency
+            currentAssets = startAssets
+
+            totalAssetsToSell = startAssets * (PCT_TO_BOOK6/100)
+            split = (totalAssetsToSell * (PCT_OF_SPLIT/100))
+
+            if (split < MINIMUM_ORDER_VALUE)
+                split = totalAssetsToSell
+
+            amountRemaining = totalAssetsToSell
+            infLoop = 0
+            while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
+                startingCurrency = @portfolio.positions[i.curr()].amount
+                startingAssets = @portfolio.positions[i.asset()].amount
+
+                ticker = trading.getTicker(i)
+                sellAmount = Math.min(split*.99, amountRemaining)
+                price = (ticker.sell*ORDER_PRICE2)
+                try
+                    trading.sell i, ORDER_TYPE2, sellAmount, price, 60 * @config.interval
+                catch error
+                    if (/insufficient funds/i.exec(error))
+                        currentCurrency = startingCurrency
+                        currentAssets = startingAssets
+                        break
+
+                sleep(30000)
+                i.update
+                currentCurrency = @portfolio.positions[i.curr()].amount
+                currentAssets = @portfolio.positions[i.asset()].amount
+                assetDelta = (startingAssets - currentAssets)
+                if (assetDelta != 0)
+                    currencyDelta = (currentCurrency - startingCurrency)
+                    salePrice = (ticker.sell*ORDER_PRICE2)
+                    warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+                amountRemaining -= assetDelta
+
+            totalSold = (startAssets - currentAssets)
+            currencyGain = (currentCurrency - startCurrency)
+            salePrice = (ticker.sell*ORDER_PRICE2)
+            warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+            warn "Finished Selling!"
+            storage.lastSellPrice = salePrice
+            storage.sells++
+            if (storage.lastBuyPrice != null)
+                if (salePrice > storage.lastBuyPrice)
+                    storage.wins++
+                else
+                    storage.losses++
+            plotMark
+                bookProfit6: salePrice
+            storage.profitsbooked6 = true            
+            storage.sold = false
+            storage.bought = true
+            storage.stoploss = false
+#stop loss
           else
             storage.consecutiveBuySignals = 0
             storage.consecutiveSellSignals = 0
@@ -431,7 +710,7 @@ handle: (context, data) ->
             currencyGain = (currentCurrency - startCurrency)
             salePrice = (ticker.sell*ORDER_PRICE3)
             warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-            warn "Finished Selling!"
+            warn "Stop Loss Complete!"
             storage.lastSellPrice = salePrice
             storage.sells++
             if (storage.lastBuyPrice != null)
@@ -441,7 +720,9 @@ handle: (context, data) ->
                     storage.losses++
             plotMark
                 stopLoss: salePrice
-            storage.stoploss = true          
+            storage.stoploss = true 
+            storage.sold = true
+            storage.bought = false
 
     storage.lastFisher = fisher
 
