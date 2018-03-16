@@ -1,5 +1,5 @@
 #5 Minute Fisher Transform Advanced Bot
-#
+#Created by buyTFdip
 trading = require 'trading'
 talib = require 'talib'
 params = require 'params'
