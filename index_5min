@@ -6,10 +6,10 @@ params = require 'params'
 
 NUMBER_OF_DAYS = params.add "Number of days used for calculations", .5
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
-CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
-BOOK_PROFIT_PCT = params.add "% gain before taking 1st profits (set to 0 to disable)", 6.5
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 5
+BOOK_PROFIT_PCT = params.add "% gain before taking 1st profits (set to 0 to disable)", 5
 PCT_TO_BOOK = params.add "% of holdings to sell when booking profits", 100
-STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 0
+STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 5
 PCT_OF_SPLIT = params.add "% iceberg split", 100
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
 ORDER_TYPE = params.addOptions 'Global order type', ['market', 'limit', 'iceberg'], 'limit'
@@ -26,7 +26,7 @@ init: (context) ->
 #plot marks
     setPlotOptions
         Bought:
-            color: 'rgb(112, 219, 112)'
+            color: 'rgb(0, 204, 0)'
         Sold:
             color: 'rgb(230, 0, 0)'
         Book_Profit:
