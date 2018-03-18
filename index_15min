@@ -1,27 +1,31 @@
-#5 Minute Fisher Transform Advanced Bot
+#15 Min Fisher Transform Advanced Bot
 #Created by buyTFdip
 trading = require 'trading'
 talib = require 'talib'
 params = require 'params'
 
-NUMBER_OF_DAYS = params.add "Number of days used for calculations", .5
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", 1
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
-CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 5
-BOOK_PROFIT_PCT = params.add "% gain before taking 1st profits (set to 0 to disable)", 5
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
+RSI_BUY_LB = params.add "RSI buy look back period", 10
+MACD_BUY_LB = params.add "MACD buy look back period", 10
+RSI_SELL_LB = params.add "RSI sell look back period", 10
+MACD_SELL_LB = params.add "MACD sell look back period", 10
+BOOK_PROFIT_PCT = params.add "% gain before taking your profits (set to 0 to disable)", 20
 PCT_TO_BOOK = params.add "% of holdings to sell when booking profits", 100
-STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 5
+STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 10
 PCT_OF_SPLIT = params.add "% iceberg split", 100
 MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
-ORDER_TYPE = params.addOptions 'Global order type', ['market', 'limit', 'iceberg'], 'limit'
-ORDER_PRICE = params.add 'Global trades at [Market Price x]', 1.002
-ORDER_TYPE2 = params.addOptions 'Profit taking order type', ['market', 'limit', 'iceberg'], 'limit'
-ORDER_PRICE2 = params.add 'Profit taking trades at [Market Price x]', 1.002
+ORDER_TYPE = params.addOptions 'Global order type', ['market', 'limit', 'iceberg'], 'market'
+ORDER_PRICE = params.add 'Global trades at [Market Price x]', 1
+ORDER_TYPE2 = params.addOptions 'Profit taking order type', ['market', 'limit', 'iceberg'], 'market'
+ORDER_PRICE2 = params.add 'Profit taking trades at [Market Price x]', 1
 ORDER_TYPE3 = params.addOptions 'Stop loss order type', ['market', 'limit', 'iceberg'], 'market'
 ORDER_PRICE3 = params.add 'Stop loss trades at [Market Price x]', 1
 
 init: (context) ->
 
-    info "Thanks for using the #{NUMBER_OF_DAYS}-Day 5 Minute Fisher Transform Advanced"
+    info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Advanced Bot"
     info "Please be patient while the bot waits for a signal"
 #plot marks
     setPlotOptions
@@ -148,7 +152,7 @@ handle: (context, data) ->
 
             minimumCurrency = i.price * MINIMUM_ORDER_VALUE
 #buy sequence
-            if (!storage.bought and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - 2] and _.last(rsi) > rsi[rsi.length - 2])
+            if (!storage.bought and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - MACD_BUY_LB] and _.last(rsi) > rsi[rsi.length - RSI_BUY_LB])
                 currentCurrency = startCurrency
                 currentAssets = startAssets
 
@@ -207,7 +211,7 @@ handle: (context, data) ->
             plotMark
                 Bears: _.last(i.low) * 0.97
 #sell sequence
-            if (!storage.sold and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - 2] and _.last(rsi) < rsi[rsi.length - 2])
+            if (!storage.sold and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - MACD_BUY_LB] and _.last(rsi) < rsi[rsi.length - RSI_BUY_LB])
                 currentCurrency = startCurrency
                 currentAssets = startAssets
 
@@ -386,7 +390,7 @@ handle: (context, data) ->
     botPL = ((currentWorth - storage.initialWorth)/storage.initialWorth) * 100
     marketPL = ((currentPrice - storage.initialPrice)/storage.initialPrice) * 100
 
-    info "---------- #{NUMBER_OF_DAYS}-Day | 5 Minute Fisher Transform Advanced Bot ----------"
+    info "---------- #{NUMBER_OF_DAYS}-Day | FT Advanced Bot ----------"
     info "Current Price: #{currentPrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
     info "Exchange Wallet: #{startCurrency.toFixed(8)} #{i._pair[1].toUpperCase()} and #{startAssets.toFixed(8)} #{i._pair[0].toUpperCase()}"
     info "Start Worth: #{storage.initialWorth.toFixed(8)} #{i._pair[1].toUpperCase()} or #{(storage.initialWorth/storage.initialPrice).toFixed(8)} #{i._pair[0].toUpperCase()}"
@@ -406,11 +410,6 @@ handle: (context, data) ->
         info "Buy&Hold P/L: #{marketPL.toFixed(2)}%"
     else
         warn "Buy&Hold P/L: #{marketPL.toFixed(2)}%"
-
-    if (storage.sold)
-        info "Currently Sold"
-    if (storage.bought)
-        info "Currently Bought"
 
     info "Buys: #{storage.buys} Sells: #{storage.sells} Total Orders: #{storage.buys + storage.sells}"
     info "Wins: #{storage.wins} Losses: #{storage.losses} Total Trades: #{storage.wins + storage.losses}"
