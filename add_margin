@@ -32,26 +32,26 @@ init: ->
     storage.initialized ?= false
 
 handle: ->
-    instrument = @data.instruments[0]
-    info = mt.getMarginInfo instrument
-    pos = mt.getPosition instrument
+    i = @data.instruments[0]
+    info = mt.getMarginInfo i
+    pos = mt.getPosition i
 
     if (!storage.initialized)
-        if (@Margin.OpenShort(pos, instrument, instrument.price, info.tradable_balance, info))
+        if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
             storage.startBalance = info.margin_balance
             storage.initialized = true
 
     debug "Starting Position Balance: #{storage.startBalance}"
-    debug "Current Margin Balance: #{@Margin.OpenPositionCurrentBalance(instrument.price, storage.startBalance, pos)}"
-    debug "Current Position P/L: #{@Margin.OpenPositionPL(instrument.price, pos).toFixed(2)}%"
+    debug "Current Margin Balance: #{@Margin.OpenPositionCurrentBalance(i.price, storage.startBalance, pos)}"
+    debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
     debug "----------------------------------------------"
     debug " "
 
 onStop: ->
-    instrument = @data.instruments[0]
+    i = @data.instruments[0]
     # unlike orders open positions don't get cancelled when the bot is stopped
     # the below snippet can be used to programmatically close it
-    pos = mt.getPosition instrument
+    pos = mt.getPosition i
     if pos
         debug "Closing position"
-        mt.closePosition instrument
+        mt.closePosition i
