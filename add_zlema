@@ -1,0 +1,449 @@
+#Fisher Transform Advanced Bot
+#Created by buyTFdip
+trading = require 'trading'
+talib = require 'talib'
+params = require 'params'
+
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", 2
+CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
+RSI_BUY_LB = params.add "RSI buy look back period", 10
+MACD_BUY_LB = params.add "MACD buy look back period", 10
+RSI_SELL_LB = params.add "RSI sell look back period", 10
+MACD_SELL_LB = params.add "MACD sell look back period", 10
+BOOK_PROFIT_PCT = params.add "% gain before taking your profits (set to 0 to disable)", 10
+PCT_TO_BOOK = params.add "% of holdings to sell when booking profits", 100
+STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 10
+PCT_OF_SPLIT = params.add "% iceberg split", 100
+MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
+ORDER_TYPE = params.addOptions 'Global order type', ['market', 'limit', 'iceberg'], 'market'
+ORDER_PRICE = params.add 'Global trades at [Market Price x]', 1
+ORDER_TYPE2 = params.addOptions 'Profit taking order type', ['market', 'limit', 'iceberg'], 'market'
+ORDER_PRICE2 = params.add 'Profit taking trades at [Market Price x]', 1
+ORDER_TYPE3 = params.addOptions 'Stop loss order type', ['market', 'limit', 'iceberg'], 'market'
+ORDER_PRICE3 = params.add 'Stop loss trades at [Market Price x]', 1
+
+init: (context) ->
+
+    info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Advanced Bot"
+    info "Please be patient while the bot waits for a signal"
+#plot marks
+    setPlotOptions
+        Bought:
+            color: 'rgb(0, 204, 0)'
+        Sold:
+            color: 'rgb(230, 0, 0)'
+        Book_Profit:
+            color: 'rgb(255, 102, 0)'
+        Stop_Loss:
+            color: 'rgb(0, 0, 0)'
+        Bears:
+            color: 'rgba(192, 57, 43, .15)'
+            secondary: false
+            size: 5
+        Bulls:
+            color: 'rgba(39, 174, 96, .15)'
+            secondary: false
+            size: 5
+        MACD_Signal:
+            color: 'rgba(127, 63, 191, .50)'
+            size: 5
+            secondary: true
+            lineWidth: 3
+        RSI_Signal:
+            color: 'rgba(63, 127, 191, .50)'
+            size: 5
+            secondary: true
+            lineWidth: 3
+        ZLEMA:
+            color: 'rgba(200, 70, 191, .50)'
+            size: 5
+            secondary: true
+            lineWidth: 3
+
+handle: (context, data) ->
+    storage.consecutiveSellSignals ?= 0
+    storage.consecutiveBuySignals ?= 0
+    storage.wins ?= 0
+    storage.losses ?= 0
+    storage.sells ?= 0
+    storage.sold ?= false
+    storage.stoploss ?= false
+    storage.lastSellPrice ?= null
+    storage.buys ?= 0
+    storage.bought ?= false
+    storage.profitsbooked ?= false
+    storage.lastBuyPrice ?= null
+    storage.lastValue ?= null
+    storage.lastFisher ?= null
+    i = data.instruments[0]
+    startCurrency = @portfolio.positions[i.curr()].amount
+    startAssets = @portfolio.positions[i.asset()].amount
+    longPeriod = Math.min(parseInt((24*60)/i.interval) * NUMBER_OF_DAYS, i.size - 1)
+    shortPeriod = parseInt(longPeriod/3)
+
+    currentPrice = _.last(i.close)
+    currentWorth = startCurrency + startAssets * currentPrice
+
+    storage.initialWorth ?= currentWorth
+    storage.initialPrice ?= currentPrice
+
+    ema1 = talib.EMA
+      inReal: i.close
+      startIdx: 0
+      endIdx: i.close.length-1
+      optInTimePeriod: longPeriod
+    ema2 = talib.EMA
+      inReal: ema1
+      startIdx: 0
+      endIdx: ema1.length-1
+      optInTimePeriod: shortPeriod
+    if ema1.length > ema2.length
+      ema1 = _.drop(ema1, ema1.length - ema2.length)
+    if ema2.length > ema1.length
+      ema2 = _.drop(ema2, ema2.length - ema1.length)
+    emad = talib.SUB
+      inReal0: ema1
+      inReal1: ema2
+      startIdx: 0
+      endIdx: ema1.length-1
+    talib.ADD
+      inReal0: ema1
+      inReal1: emad
+      startIdx: 0
+      endIdx: ema1.length-1
+        
+    rsi = talib.RSI
+        inReal: i.close
+        startIdx: 0
+        endIdx: i.close.length - 1
+        optInTimePeriod: longPeriod
+
+    macd = talib.MACD
+        inReal: i.close
+        startIdx: 0
+        endIdx: i.close.length - 1
+        optInFastPeriod: shortPeriod
+        optInSlowPeriod: longPeriod
+        optInSignalPeriod: shortPeriod
+
+    m = macd.outMACD
+    s = macd.outMACDSignal
+    h = macd.outMACDHist
+
+    median = talib.MEDPRICE
+        high: i.high
+        low: i.low
+        startIdx: i.high.length - 1 - longPeriod
+        endIdx: i.high.length - 1
+
+    high = talib.MAX
+        inReal: median
+        startIdx: 0
+        endIdx: median.length - 1
+        optInTimePeriod: longPeriod
+
+
+    low = talib.MIN
+        inReal: median
+        startIdx: 0
+        endIdx: median.length - 1
+        optInTimePeriod: longPeriod
+    
+    high = _.last(high)
+    low = _.last(low)
+    median = _.last(median)
+
+    value = (median - low) / (high - low)
+    
+    value = .33 * 2 * (value - .5)
+    if (storage.lastValue != null)
+        value += (.67 * storage.lastValue)
+
+    if (value > .9999)
+        value = .9999
+    else if (value < -.9999)
+        value = -.9999
+
+    storage.lastValue = value
+    
+    value = (1 + value) / (1 - value)
+
+    fisher = (.25 * Math.log(value))
+
+    if (storage.lastFisher != null)
+        fisher +=  (.5 * storage.lastFisher)
+
+        if (fisher > storage.lastFisher)
+            storage.consecutiveSellSignals = 0
+            storage.consecutiveBuySignals += 1
+            plotMark
+                Bulls: _.last(i.high) * 1.03
+
+            minimumCurrency = i.price * MINIMUM_ORDER_VALUE
+#buy sequence
+            if (!storage.bought and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - MACD_BUY_LB] and _.last(rsi) > rsi[rsi.length - RSI_BUY_LB])
+                currentCurrency = startCurrency
+                currentAssets = startAssets
+
+                totalCurrencyToSpend = startCurrency
+                split = totalCurrencyToSpend
+
+                if (split < minimumCurrency)
+                    split = totalCurrencyToSpend
+
+                amountRemaining = totalCurrencyToSpend
+                infLoop = 0
+                while (infLoop++ < 100 and amountRemaining >= minimumCurrency)
+                    startingCurrency = @portfolio.positions[i.curr()].amount
+                    startingAssets = @portfolio.positions[i.asset()].amount
+
+                    ticker = trading.getTicker(i)
+                    buyAmount = Math.min((split/ticker.buy)*.99, amountRemaining/ticker.buy)
+                    price = (ticker.buy/ORDER_PRICE)
+                    try
+                        trading.buy i, ORDER_TYPE, buyAmount, price, 60 * @config.interval
+                    catch error
+                        if (/insufficient funds/i.exec(error))
+                            currentCurrency = startingCurrency
+                            currentAssets = startingAssets
+                            break
+
+                    sleep(30000)
+                    i.update
+                    currentCurrency = @portfolio.positions[i.curr()].amount
+                    currentAssets = @portfolio.positions[i.asset()].amount
+                    currencyDelta = (startingCurrency - currentCurrency)
+                    if (currencyDelta != 0)
+                        assetDelta = (currentAssets - startingAssets)
+                        salePrice = (i.price/ORDER_PRICE)
+                        info "Bought #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+                    amountRemaining -= currencyDelta
+
+                totalBought = (currentAssets - startAssets)
+                currencySpent = (startCurrency - currentCurrency)
+                salePrice = (i.price/ORDER_PRICE)
+                info "Bought a total of #{totalBought.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+                info "Finished Buying!"
+                storage.sold = false
+                storage.bought = true
+                storage.profitsbooked = false
+                storage.consecutiveBuySignals = 0
+                storage.consecutiveSellSignals = 0
+                storage.lastBuyPrice = salePrice
+                storage.buys++
+
+                plotMark
+                    Bought: salePrice
+        else if (fisher < storage.lastFisher)
+            storage.consecutiveSellSignals += 1
+            storage.consecutiveBuySignals = 0
+            plotMark
+                Bears: _.last(i.low) * 0.97
+#sell sequence
+            if (!storage.sold and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - MACD_BUY_LB] and _.last(rsi) < rsi[rsi.length - RSI_BUY_LB])
+                currentCurrency = startCurrency
+                currentAssets = startAssets
+
+                totalAssetsToSell = startAssets
+                split = totalAssetsToSell
+
+                if (split < MINIMUM_ORDER_VALUE)
+                    split = totalAssetsToSell
+
+                amountRemaining = totalAssetsToSell
+                infLoop = 0
+                while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
+                    startingCurrency = @portfolio.positions[i.curr()].amount
+                    startingAssets = @portfolio.positions[i.asset()].amount
+
+                    ticker = trading.getTicker(i)
+                    sellAmount = Math.min(split*.9975, amountRemaining)
+                    price = (ticker.sell*ORDER_PRICE)
+                    try
+                        trading.sell i, ORDER_TYPE, sellAmount, price, 60 * @config.interval
+                    catch error
+                        if (/insufficient funds/i.exec(error))
+                            currentCurrency = startingCurrency
+                            currentAssets = startingAssets
+                            break
+
+                    sleep(30000)
+                    i.update
+                    currentCurrency = @portfolio.positions[i.curr()].amount
+                    currentAssets = @portfolio.positions[i.asset()].amount
+                    assetDelta = (startingAssets - currentAssets)
+                    if (assetDelta != 0)
+                        currencyDelta = (currentCurrency - startingCurrency)
+                        salePrice = (i.price*ORDER_PRICE)
+                        warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+                    amountRemaining -= assetDelta
+
+                totalSold = (startAssets - currentAssets)
+                currencyGain = (currentCurrency - startCurrency)
+                salePrice = (i.price*ORDER_PRICE)
+
+                warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+                warn "Finished Selling!"
+                storage.sold = true
+                storage.bought = false
+                storage.profitsbooked = false
+                storage.consecutiveBuySignals = 0
+                storage.consecutiveSellSignals = 0
+                storage.lastSellPrice = salePrice
+                storage.sells++
+                if (storage.lastBuyPrice != null)
+                    if (salePrice > storage.lastBuyPrice)
+                        storage.wins++
+                    else
+                        storage.losses++
+                plotMark
+                    Sold: salePrice
+        else
+            storage.consecutiveBuySignals = 0
+            storage.consecutiveSellSignals = 0
+#profit take sequence 1
+        if (BOOK_PROFIT_PCT > 0 and storage.bought and !storage.profitsbooked and (storage.lastBuyPrice *( 1 + (BOOK_PROFIT_PCT/100))) <= i.price)
+            info "Time to book profits!"
+            currentCurrency = startCurrency
+            currentAssets = startAssets
+
+            totalAssetsToSell = startAssets
+            split = totalAssetsToSell
+
+            if (split < MINIMUM_ORDER_VALUE)
+                split = totalAssetsToSell
+
+            amountRemaining = totalAssetsToSell
+            infLoop = 0
+            while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
+                startingCurrency = @portfolio.positions[i.curr()].amount
+                startingAssets = @portfolio.positions[i.asset()].amount
+
+                ticker = trading.getTicker(i)
+                sellAmount = Math.min(split*.9975, amountRemaining)
+                price = (ticker.sell*ORDER_PRICE2)
+                try
+                    trading.sell i, ORDER_TYPE2, sellAmount, price, 60 * @config.interval
+                catch error
+                    if (/insufficient funds/i.exec(error))
+                        currentCurrency = startingCurrency
+                        currentAssets = startingAssets
+                        break
+
+                sleep(30000)
+                i.update
+                currentCurrency = @portfolio.positions[i.curr()].amount
+                currentAssets = @portfolio.positions[i.asset()].amount
+                assetDelta = (startingAssets - currentAssets)
+                if (assetDelta != 0)
+                    currencyDelta = (currentCurrency - startingCurrency)
+                    salePrice = (i.price*ORDER_PRICE2)
+                    warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+                amountRemaining -= assetDelta
+
+            totalSold = (startAssets - currentAssets)
+            currencyGain = (currentCurrency - startCurrency)
+            salePrice = (i.price*ORDER_PRICE2)
+            warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+            warn "Finished Selling!"
+            storage.lastSellPrice = salePrice
+            storage.sells++
+            if (storage.lastBuyPrice != null)
+                if (salePrice > storage.lastBuyPrice)
+                    storage.wins++
+                else
+                    storage.losses++
+            plotMark
+                Book_Profit: salePrice
+            storage.profitsbooked = true
+            !storage.bought = false
+#stop loss sequence
+          if (STOP_LOSS_PCT > 0 and storage.bought and (storage.lastBuyPrice /( 1 + (STOP_LOSS_PCT/100))) >= i.price)
+            info "Stop loss initiated!"
+            currentCurrency = startCurrency
+            currentAssets = startAssets
+
+            totalAssetsToSell = startAssets
+            split = totalAssetsToSell
+
+            if (split < MINIMUM_ORDER_VALUE)
+                split = totalAssetsToSell
+
+            amountRemaining = totalAssetsToSell
+            infLoop = 0
+            while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
+                startingCurrency = @portfolio.positions[i.curr()].amount
+                startingAssets = @portfolio.positions[i.asset()].amount
+
+                ticker = trading.getTicker(i)
+                sellAmount = Math.min(split, amountRemaining)
+                price = (ticker.sell*ORDER_PRICE3)
+                try
+                    trading.sell i, ORDER_TYPE3, sellAmount, price, 60 * @config.interval
+                catch error
+                    if (/insufficient funds/i.exec(error))
+                        currentCurrency = startingCurrency
+                        currentAssets = startingAssets
+                        break
+
+                sleep(30000)
+                i.update
+                currentCurrency = @portfolio.positions[i.curr()].amount
+                currentAssets = @portfolio.positions[i.asset()].amount
+                assetDelta = (startingAssets - currentAssets)
+                if (assetDelta != 0)
+                    currencyDelta = (currentCurrency - startingCurrency)
+                    salePrice = (i.price*ORDER_PRICE3)
+                    warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+                amountRemaining -= assetDelta
+
+            totalSold = (startAssets - currentAssets)
+            currencyGain = (currentCurrency - startCurrency)
+            salePrice = (i.price*ORDER_PRICE3)
+            warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+            warn "Finished Stop Loss Selling!"
+            storage.lastSellPrice = salePrice
+            storage.sells++
+            if (storage.lastBuyPrice != null)
+                if (salePrice > storage.lastBuyPrice)
+                    storage.wins++
+                else
+                    storage.losses++
+            plotMark
+                Stop_Loss: salePrice
+            storage.sold = true
+            storage.bought = false            
+
+    storage.lastFisher = fisher
+#bot outputs
+    botPL = ((currentWorth - storage.initialWorth)/storage.initialWorth) * 100
+    marketPL = ((currentPrice - storage.initialPrice)/storage.initialPrice) * 100
+
+    info "---------- #{NUMBER_OF_DAYS}-Day | FT Advanced Bot ----------"
+    info "Current Price: #{currentPrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
+    info "Exchange Wallet: #{startCurrency.toFixed(8)} #{i._pair[1].toUpperCase()} and #{startAssets.toFixed(8)} #{i._pair[0].toUpperCase()}"
+    info "Start Worth: #{storage.initialWorth.toFixed(8)} #{i._pair[1].toUpperCase()} or #{(storage.initialWorth/storage.initialPrice).toFixed(8)} #{i._pair[0].toUpperCase()}"
+    info "Current Worth: #{currentWorth.toFixed(8)} #{i._pair[1].toUpperCase()} or #{(currentWorth/currentPrice).toFixed(8)} #{i._pair[0].toUpperCase()}"
+    info "Current MACD Signal: #{_.last(s)}"
+    plot
+        MACD_Signal: _.last(s)
+    info "Current RSI Reading: #{_.last(rsi)}"
+    plot
+        RSI_Signal: _.last(rsi)
+    info "Current ZLEMA Reading: #{_.last(emad)}"
+    plot
+        ZLEMA: _.last(emad)
+    if (botPL >= 0)
+        info "Bot P/L: #{botPL.toFixed(2)}%"
+    else
+        warn "Bot P/L: #{botPL.toFixed(2)}%"
+
+    if (marketPL >= 0)
+        info "Buy&Hold P/L: #{marketPL.toFixed(2)}%"
+    else
+        warn "Buy&Hold P/L: #{marketPL.toFixed(2)}%"
+
+    info "Buys: #{storage.buys} Sells: #{storage.sells} Total Orders: #{storage.buys + storage.sells}"
+    info "Wins: #{storage.wins} Losses: #{storage.losses} Total Trades: #{storage.wins + storage.losses}"
+    info " "
