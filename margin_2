@@ -1,9 +1,16 @@
-
-mt = require 'margin_trading' 
+mt = require 'margin_trading'
 talib = require 'talib'
 params = require 'params'
 
 NUMBER_OF_DAYS = params.add "Number of days used for calculations", 1
+CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
+RSI_BUY_LB = params.add "RSI buy look back period", 10
+MACD_BUY_LB = params.add "MACD buy look back period", 10
+RSI_SELL_LB = params.add "RSI sell look back period", 10
+MACD_SELL_LB = params.add "MACD sell look back period", 10
+BOOK_PROFIT_PCT = params.add "% gain before taking your profits (set to 0 to disable)", 20
+STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 10
 
 class Margin
 
@@ -31,7 +38,8 @@ class Margin
     @OpenPositionCurrentBalance: (currentPrice, startingBalance, marginPosition) ->
         return (startingBalance + marginPosition.amount * (currentPrice - marginPosition.price))
 
-init: (context)->
+init: (context) ->
+
     info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Advanced Bot"
     info "Please be patient while the bot waits for a signal"
 #plot marks
@@ -62,62 +70,174 @@ init: (context)->
             size: 5
             secondary: true
             lineWidth: 3
-    
 
-handle: (context, data, storage)->
-    i = @data.instruments[0]
-    info = mt.getMarginInfo(i)
+handle: (context, data) ->
+    storage.consecutiveSellSignals ?= 0
+    storage.consecutiveBuySignals ?= 0
+    storage.wins ?= 0
+    storage.losses ?= 0
+    storage.sells ?= 0
+    storage.sold ?= false
+    storage.stoploss ?= false
+    storage.lastSellPrice ?= null
+    storage.buys ?= 0
+    pos = mt.getPosition
+    storage.profitsbooked ?= false
+    storage.lastBuyPrice ?= null
+    storage.lastValue ?= null
+    storage.lastFisher ?= null
+    i = data.instruments[0]
     debug "price: #{i.price} margin balance: #{info.margin_balance} tradeable balance: #{info.tradeable_balance}"
-    price = i.close[i.close.length - 1]
-    price_previous = i.close[i.close.length - 40]
-    pos = mt.getPosition i
-    # check if position is open
-    if pos
-        debug "current position: #{pos.amount} @ #{pos.price}"
-    else
-        unless storage.invested
-          if price < price_previous
+    longPeriod = Math.min(parseInt((24*60)/i.interval) * NUMBER_OF_DAYS, i.size - 1)
+    shortPeriod = parseInt(longPeriod/3)
+
+    rsi = talib.RSI
+        inReal: i.close
+        startIdx: 0
+        endIdx: i.close.length - 1
+        optInTimePeriod: longPeriod
+
+    macd = talib.MACD
+        inReal: i.close
+        startIdx: 0
+        endIdx: i.close.length - 1
+        optInFastPeriod: shortPeriod
+        optInSlowPeriod: longPeriod
+        optInSignalPeriod: shortPeriod
+
+    m = macd.outMACD
+    s = macd.outMACDSignal
+    h = macd.outMACDHist
+
+    median = talib.MEDPRICE
+        high: i.high
+        low: i.low
+        startIdx: i.high.length - 1 - longPeriod
+        endIdx: i.high.length - 1
+
+    high = talib.MAX
+        inReal: median
+        startIdx: 0
+        endIdx: median.length - 1
+        optInTimePeriod: longPeriod
+
+
+    low = talib.MIN
+        inReal: median
+        startIdx: 0
+        endIdx: median.length - 1
+        optInTimePeriod: longPeriod
+
+    high = _.last(high)
+    low = _.last(low)
+    median = _.last(median)
+
+    value = (median - low) / (high - low)
+
+    value = .33 * 2 * (value - .5)
+    if (storage.lastValue != null)
+        value += (.67 * storage.lastValue)
+
+    if (value > .9999)
+        value = .9999
+    else if (value < -.9999)
+        value = -.9999
+
+    storage.lastValue = value
+
+    value = (1 + value) / (1 - value)
+
+    fisher = (.25 * Math.log(value))
+
+    if (storage.lastFisher != null)
+        fisher +=  (.5 * storage.lastFisher)
+
+        if (fisher > storage.lastFisher)
+            storage.consecutiveSellSignals = 0
+            storage.consecutiveBuySignals += 1
+            plotMark
+                Bulls: _.last(i.high) * 1.03
+#check position
+
+            if pos
+                debug "current position: #{pos.amount} @ #{pos.price}"
+            else
+                unless storage.invested
+#long order sequence
+            if (!pos and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - MACD_BUY_LB] and _.last(rsi) > rsi[rsi.length - RSI_BUY_LB])
+              try
+                  # long with leverage (x3.3 for Bitfinex BTC/USD)
+                  if mt.buy i, 'limit', info.tradeable_balance / i.price ,i.price
+                      storage.invested = true
+                      pos = mt.getPosition i
+                      debug "new position: #{pos.amount} @ #{pos.price}"
+                      amount = Math.abs(pos.amount) # position amount can be negative
+                      # (IMPORTANT STEP) protect our short position with a stop order
+                      if mt.addOrder i, 'sell', 'stop', amount, i.price * 0.85
+                        storage.invested = false
+                      # (optional) place a take profit order
+                      if mt.addOrder i, 'sell', 'limit', amount, i.price * 1.15
+                        storage.invested = false
+              catch e
+                  # the engine throws InsufficentFunds error if funds are not enough to open position
+                  if e instanceof InsufficientFunds
+                      error "insufficient funds"
+                  else
+                      throw e # it is important to rethrow other exceptions
+                  info "Finished Long Order!"
+                  storage.consecutiveBuySignals = 0
+                  storage.consecutiveSellSignals = 0
+
+                  plotMark
+                      Long_Order: salePrice
+        else if (fisher < storage.lastFisher)
+            storage.consecutiveSellSignals += 1
+            storage.consecutiveBuySignals = 0
+            plotMark
+                Bears: _.last(i.low) * 0.97
+#short order sequence
+            if (!pos and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - MACD_SELL_LB] and _.last(rsi) < rsi[rsi.length - RSI_SELL_LB])
             try
                 # short with leverage (x3.3 for Bitfinex BTC/USD)
                 if mt.sell i, 'limit', info.tradeable_balance / i.price ,i.price
                     storage.invested = true
-                    pos = mt.getPosition i   
+                    pos = mt.getPosition i
                     debug "new position: #{pos.amount} @ #{pos.price}"
-                    amount = Math.abs(pos.amount) # position amount can be negative 
+                    amount = Math.abs(pos.amount) # position amount can be negative
                     # (IMPORTANT STEP) protect our short position with a stop order
                     if mt.addOrder i, 'buy', 'stop', amount, i.price * 1.1
                       storage.invested = false
                     # (optional) place a take profit order
                     if mt.addOrder i, 'buy', 'limit', amount, i.price * 0.85
                       storage.invested = false
-            catch e 
+            catch e
                 # the engine throws InsufficentFunds error if funds are not enough to open position
                 if e instanceof InsufficientFunds
                     error "insufficient funds"
                 else
                     throw e # it is important to rethrow other exceptions
-          else if price > price_previous
-            try
-                # long with leverage (x3.3 for Bitfinex BTC/USD)
-                if mt.buy i, 'limit', info.tradeable_balance / i.price ,i.price
-                    storage.invested = true
-                    pos = mt.getPosition i   
-                    debug "new position: #{pos.amount} @ #{pos.price}"
-                    amount = Math.abs(pos.amount) # position amount can be negative 
-                    # (IMPORTANT STEP) protect our short position with a stop order
-                    if mt.addOrder i, 'sell', 'stop', amount, i.price * 0.85
-                      storage.invested = false
-                    # (optional) place a take profit order
-                    if mt.addOrder i, 'sell', 'limit', amount, i.price * 1.15
-                      storage.invested = false
-            catch e 
-                # the engine throws InsufficentFunds error if funds are not enough to open position
-                if e instanceof InsufficientFunds
-                    error "insufficient funds"
-                else
-                    throw e # it is important to rethrow other exceptions
+                  info "Finished Short Order!"
+                  storage.consecutiveBuySignals = 0
+                  storage.consecutiveSellSignals = 0
+
+                  plotMark
+                      Short_Order: salePrice
+        else
+            storage.consecutiveBuySignals = 0
+            storage.consecutiveSellSignals = 0
+
 # onStop is optional method. Called in both simulated and live trading modes after the script stops
 onStop: (data)->
     # (optional step) automatically close position when the script stops
     mt.closePosition
 
+    storage.lastFisher = fisher
+
+#bot outputs
+info "---------- #{NUMBER_OF_DAYS}-Day | FT Advanced Bot ----------"
+info "Current MACD Signal: #{_.last(s)}"
+plot
+    MACD_Signal: _.last(s)
+info "Current RSI Reading: #{_.last(rsi)}"
+plot
+    RSI_Signal: _.last(rsi)
