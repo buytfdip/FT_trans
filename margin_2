@@ -1,0 +1,123 @@
+
+mt = require 'margin_trading' 
+talib = require 'talib'
+params = require 'params'
+
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", 1
+
+class Margin
+
+    @OpenShort: (pos, i, shortPrice, shortAmount, marginInfo) ->
+        if (pos)
+            mt.closePosition i
+        if (mt.sell i, 'limit', shortAmount/shortPrice, shortPrice)
+            return true
+        return false
+
+    @OpenLong: (pos, i, longPrice, longAmount, marginInfo) ->
+        if (pos)
+            mt.closePosition i
+        if (mt.buy i, 'limit', longAmount/longPrice, longPrice)
+            return true
+        return false
+
+    @OpenPositionPL: (currentPrice, marginPosition) ->
+        pl = ((currentPrice - marginPosition.price)/marginPosition.price) * 100
+        if (marginPosition.amount < 0)
+            return -pl
+        else
+            return pl
+
+    @OpenPositionCurrentBalance: (currentPrice, startingBalance, marginPosition) ->
+        return (startingBalance + marginPosition.amount * (currentPrice - marginPosition.price))
+
+init: (context)->
+    info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Advanced Bot"
+    info "Please be patient while the bot waits for a signal"
+#plot marks
+    setPlotOptions
+        Bought:
+            color: 'rgb(0, 204, 0)'
+        Sold:
+            color: 'rgb(230, 0, 0)'
+        Book_Profit:
+            color: 'rgb(255, 102, 0)'
+        Stop_Loss:
+            color: 'rgb(0, 0, 0)'
+        Bears:
+            color: 'rgba(192, 57, 43, .15)'
+            secondary: false
+            size: 5
+        Bulls:
+            color: 'rgba(39, 174, 96, .15)'
+            secondary: false
+            size: 5
+        MACD_Signal:
+            color: 'rgba(127, 63, 191, .50)'
+            size: 5
+            secondary: true
+            lineWidth: 3
+        RSI_Signal:
+            color: 'rgba(63, 127, 191, .50)'
+            size: 5
+            secondary: true
+            lineWidth: 3
+    
+
+handle: (context, data, storage)->
+    i = @data.instruments[0]
+    info = mt.getMarginInfo(i)
+    debug "price: #{i.price} margin balance: #{info.margin_balance} tradeable balance: #{info.tradeable_balance}"
+    price = i.close[i.close.length - 1]
+    price_previous = i.close[i.close.length - 40]
+    pos = mt.getPosition i
+    # check if position is open
+    if pos
+        debug "current position: #{pos.amount} @ #{pos.price}"
+    else
+        unless storage.invested
+          if price < price_previous
+            try
+                # short with leverage (x3.3 for Bitfinex BTC/USD)
+                if mt.sell i, 'limit', info.tradeable_balance / i.price ,i.price
+                    storage.invested = true
+                    pos = mt.getPosition i   
+                    debug "new position: #{pos.amount} @ #{pos.price}"
+                    amount = Math.abs(pos.amount) # position amount can be negative 
+                    # (IMPORTANT STEP) protect our short position with a stop order
+                    if mt.addOrder i, 'buy', 'stop', amount, i.price * 1.1
+                      storage.invested = false
+                    # (optional) place a take profit order
+                    if mt.addOrder i, 'buy', 'limit', amount, i.price * 0.85
+                      storage.invested = false
+            catch e 
+                # the engine throws InsufficentFunds error if funds are not enough to open position
+                if e instanceof InsufficientFunds
+                    error "insufficient funds"
+                else
+                    throw e # it is important to rethrow other exceptions
+          else if price > price_previous
+            try
+                # long with leverage (x3.3 for Bitfinex BTC/USD)
+                if mt.buy i, 'limit', info.tradeable_balance / i.price ,i.price
+                    storage.invested = true
+                    pos = mt.getPosition i   
+                    debug "new position: #{pos.amount} @ #{pos.price}"
+                    amount = Math.abs(pos.amount) # position amount can be negative 
+                    # (IMPORTANT STEP) protect our short position with a stop order
+                    if mt.addOrder i, 'sell', 'stop', amount, i.price * 0.85
+                      storage.invested = false
+                    # (optional) place a take profit order
+                    if mt.addOrder i, 'sell', 'limit', amount, i.price * 1.15
+                      storage.invested = false
+            catch e 
+                # the engine throws InsufficentFunds error if funds are not enough to open position
+                if e instanceof InsufficientFunds
+                    error "insufficient funds"
+                else
+                    throw e # it is important to rethrow other exceptions
+# onStop is optional method. Called in both simulated and live trading modes after the script stops
+onStop: (data)->
+    # (optional step) automatically close position when the script stops
+    mt.closePosition
+
