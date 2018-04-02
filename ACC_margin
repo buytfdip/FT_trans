@@ -1,0 +1,112 @@
+mt = require 'margin_trading' 
+talib = require 'talib'
+params = require 'params'
+
+ACC_P = params.add "Acc Bands period", 100
+S_PROFIT_PCT = params.add "Short Profit %", 25
+L_PROFIT_PCT = params.add "Long Profit %", 25
+	
+class Margin
+
+    @OpenShort: (pos, instrument, shortPrice, shortAmount, marginInfo) ->
+        if (pos)
+            mt.closePosition instrument
+        if (mt.sell instrument, 'limit', shortAmount/shortPrice, shortPrice)
+            return true
+        return false
+
+    @OpenLong: (pos, instrument, longPrice, longAmount, marginInfo) ->
+        if (pos)
+            mt.closePosition instrument
+        if (mt.buy instrument, 'limit', longAmount/longPrice, longPrice)
+            return true
+        return false
+
+    @OpenPositionPL: (currentPrice, marginPosition) ->
+        pl = ((currentPrice - marginPosition.price)/marginPosition.price) * 100
+        if (marginPosition.amount < 0)
+            return -pl
+        else
+            return pl
+
+    @OpenPositionCurrentBalance: (currentPrice, startingBalance, marginPosition) ->
+        return (startingBalance + marginPosition.amount * (currentPrice - marginPosition.price))
+
+init: -> 	
+    #Initialize things
+    storage.initializedS ?= false
+    storage.initializedL ?= false
+
+handle: ->
+    i = @data.instruments[0]
+    info = mt.getMarginInfo i
+    pos = mt.getPosition i	
+    storage.shortPrice ?= null
+    storage.longPrice ?= null
+
+#ACC BANDS   
+    results = talib.ACCBANDS
+	      high: i.high
+	      low: i.low
+	      close: i.close
+	      startIdx: 0
+	      endIdx: i.high.length - 1
+	      optInTimePeriod: ACC_P
+    
+    uB = results.outRealUpperBand
+    mB = results.outRealMiddleBand
+    lB = results.outRealLowerBand   
+#short	    
+    if (!storage.initializedS and (i.price >= _.last(uB)))
+        if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
+            storage.startBalance = info.margin_balance
+            storage.initializedS = true
+            storage.initializedL = false
+            storage.shortPrice = i.price
+        warn "Finished Short Order!"
+#long	            	            
+    if (!storage.initializedL and (i.price <= _.last(lB)))
+        if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
+            storage.startBalance = info.margin_balance
+            storage.initializedL = true
+            storage.initializedS = false
+            storage.longPrice = i.price
+        warn "Finished Long Order!"
+            	            
+    if (S_PROFIT_PCT > 0 and storage.initializedS and (storage.shortPrice /( 1 + (S_PROFIT_PCT/100))) >= i.price)
+        (mt.buy i, 'limit', i.price, info.tradable_balance, info)
+        storage.invested = false
+    warn "Finished Short Profit Take!"
+
+
+    if (L_PROFIT_PCT > 0 and storage.initializedL and (storage.longPrice *( 1 + (L_PROFIT_PCT/100))) >= i.price)
+        (mt.sell i, 'limit', i.price, info.tradable_balance, info)
+        storage.invested = false
+    warn "Finished Long Profit Take!"
+
+#plot print
+    debug "---------- BuyTFdip's BOT ----------"
+    debug "Current Price: #{i.price}"
+    debug "Margin balance: #{info.margin_balance}"
+    debug "Tradeable balance: #{info.tradable_balance}"
+    debug "----------------------------------------------"
+    debug "Upper Accelation Band: #{_.last(uB)}"
+    plot
+        "Upper Band": _.last(uB)
+    debug "Middle Accelation Band: #{_.last(mB)}"
+    plot
+        "Mid Band": _.last(mB)
+    debug "Lower Accelation Band: #{_.last(lB)}"
+    plot	
+        "Lower Band": _.last(lB) 
+    debug "----------------------------------------------"
+    debug " "
+
+onStop: ->
+    i = @data.instruments[0]
+    # unlike orders open positions don't get cancelled when the bot is stopped
+    # the below snippet can be used to programmatically close it
+    pos = mt.getPosition i
+    if pos
+        debug "Closing position"
+        mt.closePosition i
