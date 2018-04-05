@@ -1,30 +1,25 @@
-mt = require 'margin_trading'
+#5 Min Margin Bot
+mt = require 'margin_trading' 
 talib = require 'talib'
 params = require 'params'
 
-NUMBER_OF_DAYS = params.add "Number of days used for calculations", 1
-CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
-CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
-RSI_BUY_LB = params.add "RSI buy look back period", 10
-MACD_BUY_LB = params.add "MACD buy look back period", 10
-RSI_SELL_LB = params.add "RSI sell look back period", 10
-MACD_SELL_LB = params.add "MACD sell look back period", 10
-BOOK_PROFIT_PCT = params.add "% gain before taking your profits (set to 0 to disable)", 20
-STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 10
-
+ACC_P = params.add "Acc Bands period", 10
+SS_PCT = params.add "Short Stop %", 12
+LS_PCT = params.add "Long Stop %", 12
+	
 class Margin
 
-    @OpenShort: (pos, i, shortPrice, shortAmount, marginInfo) ->
+    @OpenShort: (pos, instrument, shortPrice, shortAmount, marginInfo) ->
         if (pos)
-            mt.closePosition i
-        if (mt.sell i, 'limit', shortAmount/shortPrice, shortPrice)
+            mt.closePosition instrument
+        if (mt.sell instrument, 'limit', shortAmount/shortPrice, shortPrice)
             return true
         return false
 
-    @OpenLong: (pos, i, longPrice, longAmount, marginInfo) ->
+    @OpenLong: (pos, instrument, longPrice, longAmount, marginInfo) ->
         if (pos)
-            mt.closePosition i
-        if (mt.buy i, 'limit', longAmount/longPrice, longPrice)
+            mt.closePosition instrument
+        if (mt.buy instrument, 'limit', longAmount/longPrice, longPrice)
             return true
         return false
 
@@ -38,206 +33,105 @@ class Margin
     @OpenPositionCurrentBalance: (currentPrice, startingBalance, marginPosition) ->
         return (startingBalance + marginPosition.amount * (currentPrice - marginPosition.price))
 
-init: (context) ->
+init: -> 	
+    debug "Loading 5 MIN MARGIN BOT.."
+    
+    #Initialize things
+    storage.initialized ?= false
+    storage.initializedS ?= false
+    storage.initializedL ?= false
 
-    info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Advanced Bot"
-    info "Please be patient while the bot waits for a signal"
-#plot marks
-    setPlotOptions
-        Bought:
-            color: 'rgb(0, 204, 0)'
-        Sold:
-            color: 'rgb(230, 0, 0)'
-        Book_Profit:
-            color: 'rgb(255, 102, 0)'
-        Stop_Loss:
-            color: 'rgb(0, 0, 0)'
-        Bears:
-            color: 'rgba(192, 57, 43, .15)'
-            secondary: false
-            size: 5
-        Bulls:
-            color: 'rgba(39, 174, 96, .15)'
-            secondary: false
-            size: 5
-        MACD_Signal:
-            color: 'rgba(127, 63, 191, .50)'
-            size: 5
-            secondary: true
-            lineWidth: 3
-        RSI_Signal:
-            color: 'rgba(63, 127, 191, .50)'
-            size: 5
-            secondary: true
-            lineWidth: 3
+handle: ->
+    i = @data.instruments[0]
+    info = mt.getMarginInfo i
+    pos = mt.getPosition i	
+    storage.shortPrice ?= null
+    storage.longPrice ?= null
+    storage.longPrice ?= null
+    storage.longStop ?= null
+    storage.shortStop ?= null
+    last_i = i.close[i.close.length - 2]
 
-handle: (context, data) ->
-    storage.consecutiveSellSignals ?= 0
-    storage.consecutiveBuySignals ?= 0
-    storage.wins ?= 0
-    storage.losses ?= 0
-    storage.sells ?= 0
-    storage.sold ?= false
-    storage.stoploss ?= false
-    storage.lastSellPrice ?= null
-    storage.buys ?= 0
-    pos = mt.getPosition
-    storage.profitsbooked ?= false
-    storage.lastBuyPrice ?= null
-    storage.lastValue ?= null
-    storage.lastFisher ?= null
-    i = data.instruments[0]
-    debug "price: #{i.price} margin balance: #{info.margin_balance} tradeable balance: #{info.tradeable_balance}"
-    longPeriod = Math.min(parseInt((24*60)/i.interval) * NUMBER_OF_DAYS, i.size - 1)
-    shortPeriod = parseInt(longPeriod/3)
+#ACC BANDS   
+    results = talib.ACCBANDS
+	      high: i.high
+	      low: i.low
+	      close: i.close
+	      startIdx: 0
+	      endIdx: i.high.length - 1
+	      optInTimePeriod: ACC_P
+    
+    uB = results.outRealUpperBand
+    mB = results.outRealMiddleBand
+    lB = results.outRealLowerBand
+#short	    
+    if (!storage.initializedS and !storage.shortStop and (i.price <= _.last(uB)))
+        if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
+            storage.startBalance = info.margin_balance
+            storage.initializedS = true
+            storage.initializedL = false
+            storage.shortPrice = i.price
+            storage.shortStop = false
+            storage.longStop = false
+        warn "Finished Short Order!"
+    if storage.initializedS and !storage.shortStop
+    		SstopOrder = mt.addOrder 
+      		instrument: i
+      		side: 'buy'
+      		type: 'limit'
+      		amount: info.tradable_balance
+      		price: storage.shortPrice * 1.SS_PCT
+	    	storage.initializedS = false
+	    	storage.shortStop = true
+    if SstopOrder
+        warn "Finished Short Stop Order!"
+#long	            	            
+    if (!storage.initializedL and !storage.longStop and (i.price >= _.last(lB)))
+        if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
+            storage.startBalance = info.margin_balance
+            storage.initializedL = true
+            storage.initializedS = false
+            storage.longPrice = i.price
+            storage.shortStop = false
+            storage.longStop = false
+        warn "Finished Short Order!"
+    if storage.initializedL and !storage.longStop
+    		LstopOrder = mt.addOrder 
+      		instrument: i
+      		side: 'sell'
+      		type: 'limit'
+      		amount: info.tradable_balance
+      		price: storage.longPrice * 0.LS_PCT
+	    	storage.initializedS = false
+	    	storage.longStop = true
+    if LstopOrder
+        warn "Finished Long Stop Order!"
+    
+#plot print
+    debug "------ BuyTFdip's 5 MIN MARGIN BOT ------"
+    debug "Current Price: #{i.price.toFixed(8)} #{i._pair[1].toUpperCase()}"
+    debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
+    debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"	
+    debug "Margin balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
+    debug "Tradeable balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
+    debug "----------------------------------------------"
+    debug "Upper Accelation Band: #{_.last(uB)}"
+    plot
+        "Upper Band": _.last(uB)
+    debug "Middle Accelation Band: #{_.last(mB)}"
+    plot
+        "Mid Band": _.last(mB)
+    debug "Lower Accelation Band: #{_.last(lB)}"
+    plot
+        "Lower Band": _.last(lB) 
+    debug "----------------------------------------------"
+    debug " "
 
-    rsi = talib.RSI
-        inReal: i.close
-        startIdx: 0
-        endIdx: i.close.length - 1
-        optInTimePeriod: longPeriod
-
-    macd = talib.MACD
-        inReal: i.close
-        startIdx: 0
-        endIdx: i.close.length - 1
-        optInFastPeriod: shortPeriod
-        optInSlowPeriod: longPeriod
-        optInSignalPeriod: shortPeriod
-
-    m = macd.outMACD
-    s = macd.outMACDSignal
-    h = macd.outMACDHist
-
-    median = talib.MEDPRICE
-        high: i.high
-        low: i.low
-        startIdx: i.high.length - 1 - longPeriod
-        endIdx: i.high.length - 1
-
-    high = talib.MAX
-        inReal: median
-        startIdx: 0
-        endIdx: median.length - 1
-        optInTimePeriod: longPeriod
-
-
-    low = talib.MIN
-        inReal: median
-        startIdx: 0
-        endIdx: median.length - 1
-        optInTimePeriod: longPeriod
-
-    high = _.last(high)
-    low = _.last(low)
-    median = _.last(median)
-
-    value = (median - low) / (high - low)
-
-    value = .33 * 2 * (value - .5)
-    if (storage.lastValue != null)
-        value += (.67 * storage.lastValue)
-
-    if (value > .9999)
-        value = .9999
-    else if (value < -.9999)
-        value = -.9999
-
-    storage.lastValue = value
-
-    value = (1 + value) / (1 - value)
-
-    fisher = (.25 * Math.log(value))
-
-    if (storage.lastFisher != null)
-        fisher +=  (.5 * storage.lastFisher)
-
-        if (fisher > storage.lastFisher)
-            storage.consecutiveSellSignals = 0
-            storage.consecutiveBuySignals += 1
-            plotMark
-                Bulls: _.last(i.high) * 1.03
-#check position
-
-            if pos
-                debug "current position: #{pos.amount} @ #{pos.price}"
-            else
-                unless storage.invested
-#long order sequence
-            if (!pos and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - MACD_BUY_LB] and _.last(rsi) > rsi[rsi.length - RSI_BUY_LB])
-              try
-                  # long with leverage (x3.3 for Bitfinex BTC/USD)
-                  if mt.buy i, 'limit', info.tradeable_balance / i.price ,i.price
-                      storage.invested = true
-                      pos = mt.getPosition i
-                      debug "new position: #{pos.amount} @ #{pos.price}"
-                      amount = Math.abs(pos.amount) # position amount can be negative
-                      # (IMPORTANT STEP) protect our short position with a stop order
-                      if mt.addOrder i, 'sell', 'stop', amount, i.price * 0.85
-                        storage.invested = false
-                      # (optional) place a take profit order
-                      if mt.addOrder i, 'sell', 'limit', amount, i.price * 1.15
-                        storage.invested = false
-              catch e
-                  # the engine throws InsufficentFunds error if funds are not enough to open position
-                  if e instanceof InsufficientFunds
-                      error "insufficient funds"
-                  else
-                      throw e # it is important to rethrow other exceptions
-                  info "Finished Long Order!"
-                  storage.consecutiveBuySignals = 0
-                  storage.consecutiveSellSignals = 0
-
-                  plotMark
-                      Long_Order: salePrice
-        else if (fisher < storage.lastFisher)
-            storage.consecutiveSellSignals += 1
-            storage.consecutiveBuySignals = 0
-            plotMark
-                Bears: _.last(i.low) * 0.97
-#short order sequence
-            if (!pos and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - MACD_SELL_LB] and _.last(rsi) < rsi[rsi.length - RSI_SELL_LB])
-            try
-                # short with leverage (x3.3 for Bitfinex BTC/USD)
-                if mt.sell i, 'limit', info.tradeable_balance / i.price ,i.price
-                    storage.invested = true
-                    pos = mt.getPosition i
-                    debug "new position: #{pos.amount} @ #{pos.price}"
-                    amount = Math.abs(pos.amount) # position amount can be negative
-                    # (IMPORTANT STEP) protect our short position with a stop order
-                    if mt.addOrder i, 'buy', 'stop', amount, i.price * 1.1
-                      storage.invested = false
-                    # (optional) place a take profit order
-                    if mt.addOrder i, 'buy', 'limit', amount, i.price * 0.85
-                      storage.invested = false
-            catch e
-                # the engine throws InsufficentFunds error if funds are not enough to open position
-                if e instanceof InsufficientFunds
-                    error "insufficient funds"
-                else
-                    throw e # it is important to rethrow other exceptions
-                  info "Finished Short Order!"
-                  storage.consecutiveBuySignals = 0
-                  storage.consecutiveSellSignals = 0
-
-                  plotMark
-                      Short_Order: salePrice
-        else
-            storage.consecutiveBuySignals = 0
-            storage.consecutiveSellSignals = 0
-
-# onStop is optional method. Called in both simulated and live trading modes after the script stops
-onStop: (data)->
-    # (optional step) automatically close position when the script stops
-    mt.closePosition
-
-    storage.lastFisher = fisher
-
-#bot outputs
-info "---------- #{NUMBER_OF_DAYS}-Day | FT Advanced Bot ----------"
-info "Current MACD Signal: #{_.last(s)}"
-plot
-    MACD_Signal: _.last(s)
-info "Current RSI Reading: #{_.last(rsi)}"
-plot
-    RSI_Signal: _.last(rsi)
+onStop: ->
+    i = @data.instruments[0]
+    # unlike orders open positions don't get cancelled when the bot is stopped
+    # the below snippet can be used to programmatically close it
+    pos = mt.getPosition i
+    if pos
+        debug "Closing position"
+        mt.closePosition i
