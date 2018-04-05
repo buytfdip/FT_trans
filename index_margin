@@ -1,9 +1,8 @@
-#5 Min Margin Bot
 mt = require 'margin_trading' 
 talib = require 'talib'
 params = require 'params'
 
-ACC_P = params.add "Acc Bands period", 10
+ACC_P = params.add "Acc Bands period", 70
 SS_PCT = params.add "Short Stop %", 12
 LS_PCT = params.add "Long Stop %", 12
 	
@@ -34,10 +33,7 @@ class Margin
         return (startingBalance + marginPosition.amount * (currentPrice - marginPosition.price))
 
 init: -> 	
-    debug "Loading 5 MIN MARGIN BOT.."
-    
     #Initialize things
-    storage.initialized ?= false
     storage.initializedS ?= false
     storage.initializedL ?= false
 
@@ -50,7 +46,6 @@ handle: ->
     storage.longPrice ?= null
     storage.longStop ?= null
     storage.shortStop ?= null
-    last_i = i.close[i.close.length - 2]
 
 #ACC BANDS   
     results = talib.ACCBANDS
@@ -65,7 +60,7 @@ handle: ->
     mB = results.outRealMiddleBand
     lB = results.outRealLowerBand
 #short	    
-    if (!storage.initializedS and !storage.shortStop and (i.price <= _.last(uB)))
+    if (!storage.initializedS and !storage.shortStop and (i.price >= _.last(uB)))
         if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
             storage.startBalance = info.margin_balance
             storage.initializedS = true
@@ -86,7 +81,7 @@ handle: ->
     if SstopOrder
         warn "Finished Short Stop Order!"
 #long	            	            
-    if (!storage.initializedL and !storage.longStop and (i.price >= _.last(lB)))
+    if (!storage.initializedL and !storage.longStop and (i.price <= _.last(lB)))
         if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
             storage.startBalance = info.margin_balance
             storage.initializedL = true
@@ -104,28 +99,24 @@ handle: ->
       		price: storage.longPrice * 0.LS_PCT
 	    	storage.initializedS = false
 	    	storage.longStop = true
-    if LstopOrder
+    if SstopOrder
         warn "Finished Long Stop Order!"
-    
+
 #plot print
-    debug "------ BuyTFdip's 5 MIN MARGIN BOT ------"
+    debug "---------- BuyTFdip's Margin Bot ----------"
     debug "Current Price: #{i.price.toFixed(8)} #{i._pair[1].toUpperCase()}"
     debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
-    debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"	
+    debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
     debug "Margin balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
     debug "----------------------------------------------"
-    debug "Upper Accelation Band: #{_.last(uB)}"
+    debug " "
     plot
         "Upper Band": _.last(uB)
-    debug "Middle Accelation Band: #{_.last(mB)}"
     plot
         "Mid Band": _.last(mB)
-    debug "Lower Accelation Band: #{_.last(lB)}"
     plot
         "Lower Band": _.last(lB) 
-    debug "----------------------------------------------"
-    debug " "
 
 onStop: ->
     i = @data.instruments[0]
