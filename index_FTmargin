@@ -7,10 +7,10 @@ params = require 'params'
 NUMBER_OF_DAYS = params.add "Number of days used for calculations", 6
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
 CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
-SS_PCT = params.add "Short Stop Loss %", 15
-LS_PCT = params.add "Long Stop Loss %", 15
-LT_PCT = params.add "Short Profit Take %", 15
-ST_PCT = params.add "Long Stop Take %", 15
+SS_PCT = params.add "Short Stop Loss %", 7.5
+LS_PCT = params.add "Long Stop Loss %", 7.5
+LT_PCT = params.add "Short Profit Take %", 17
+ST_PCT = params.add "Long Stop Take %", 17
 
 class Margin
 
