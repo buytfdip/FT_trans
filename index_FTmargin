@@ -219,7 +219,7 @@ handle: (context, data) ->
     debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
     debug "Margin balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
-    debug "----------------------------------------------"
+    debug ""
     plot
         macdSignal: _.last(s)
     plot
