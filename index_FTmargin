@@ -40,30 +40,20 @@ init: (context) ->
     debug "..."
 
     setPlotOptions
-        bought:
+        Bought:
             color: 'rgba(46, 204, 113, .80)'
-        sold:
+        Sold:
             color: 'rgba(231, 76, 60, .80)'
-        bookProfit:
+        BookProfit:
             color: 'rgba(231, 76, 60, .40)'
-        bears:
+        Bears:
             color: 'rgba(192, 57, 43, .15)'
             secondary: false
             size: 5
-        bulls:
+        Bulls:
             color: 'rgba(39, 174, 96, .15)'
             secondary: false
             size: 5
-        macdSignal:
-            color: 'rgba(127, 63, 191, .50)'
-            size: 5
-            secondary: true
-            lineWidth: 3
-        rsiSignal:
-            color: 'rgba(63, 127, 191, .50)'
-            size: 5
-            secondary: true
-            lineWidth: 3
 
 handle: (context, data) ->
     i = data.instruments[0]
@@ -155,7 +145,7 @@ handle: (context, data) ->
             storage.consecutiveSellSignals = 0
             storage.consecutiveBuySignals += 1
             plotMark
-                bulls: _.last(i.high) * 1.03
+                Bulls: _.last(i.high) * 1.03
 
             if (!storage.initializedL and !storage.longStop and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - 2] and _.last(rsi) > rsi[rsi.length - 2])
                 if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
@@ -184,7 +174,7 @@ handle: (context, data) ->
             storage.consecutiveSellSignals += 1
             storage.consecutiveBuySignals = 0
             plotMark
-                bears: _.last(i.low) * 0.97
+                Bears: _.last(i.low) * 0.97
             if (!storage.initializedS and !storage.shortStop and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - 2] and _.last(rsi) < rsi[rsi.length - 2])
                 if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
                     storage.startBalance = info.margin_balance
@@ -220,8 +210,6 @@ handle: (context, data) ->
     debug "Margin balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
     debug " "
-    plot
-        rsiSignal: _.last(rsi)
 
 onStop: ->
     i = @data.instruments[0]
