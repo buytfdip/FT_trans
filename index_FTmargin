@@ -1,4 +1,4 @@
-mt = require 'margin_trading' 
+mt = require 'margin_trading'
 talib = require 'talib'
 params = require 'params'
 
@@ -33,7 +33,7 @@ class Margin
 
     @OpenPositionCurrentBalance: (currentPrice, startingBalance, marginPosition) ->
         return (startingBalance + marginPosition.amount * (currentPrice - marginPosition.price))
-        
+
 init: (context) ->
 
     debug "BuyTFdip's #{NUMBER_OF_DAYS}-DAY FT MARGIN BOT is warming up"
@@ -68,7 +68,7 @@ init: (context) ->
 handle: (context, data) ->
     i = data.instruments[0]
     info = mt.getMarginInfo i
-    pos = mt.getPosition i	
+    pos = mt.getPosition i
     storage.consecutiveSellSignals ?= 0
     storage.consecutiveBuySignals ?= 0
     storage.wins ?= 0
@@ -167,7 +167,7 @@ handle: (context, data) ->
                     storage.longStop = false
                 warn "Finished Short Order!"
             if storage.initializedL and !storage.longStop
-            		LstopOrder = mt.addOrder 
+            		LstopOrder = mt.addOrder
               		instrument: i
               		side: 'sell'
               		type: 'limit'
@@ -176,7 +176,7 @@ handle: (context, data) ->
         	    	storage.initializedS = false
         	    	storage.longStop = true
             if SstopOrder
-                warn "Finished Long Stop Order!"  
+                warn "Finished Long Stop Order!"
                 storage.consecutiveBuySignals = 0
                 storage.consecutiveSellSignals = 0
 
@@ -195,7 +195,7 @@ handle: (context, data) ->
                     storage.longStop = false
                 warn "Finished Short Order!"
             if storage.initializedS and !storage.shortStop
-            		SstopOrder = mt.addOrder 
+            		SstopOrder = mt.addOrder
               		instrument: i
               		side: 'buy'
               		type: 'limit'
@@ -204,12 +204,12 @@ handle: (context, data) ->
         	    	storage.initializedS = false
         	    	storage.shortStop = true
             if SstopOrder
-                    warn "Finished Short Stop Order!"              
+                    warn "Finished Short Stop Order!"
                     storage.consecutiveBuySignals = 0
                     storage.consecutiveSellSignals = 0
         else
             storage.consecutiveBuySignals = 0
-            storage.consecutiveSellSignals = 0  
+            storage.consecutiveSellSignals = 0
 
     storage.lastFisher = fisher
 
@@ -220,8 +220,6 @@ handle: (context, data) ->
     debug "Margin balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
     debug " "
-    plot
-        macdSignal: _.last(s)
     plot
         rsiSignal: _.last(rsi)
 
