@@ -36,7 +36,7 @@ class Margin
         
 init: (context) ->
 
-    debug "buyTFdip's #{NUMBER_OF_DAYS}-DAY FT MARGIN BOT is warming up!"
+    debug "BuyTFdip's #{NUMBER_OF_DAYS}-DAY FT MARGIN BOT is warming up"
     debug "..."
 
     setPlotOptions
@@ -213,13 +213,13 @@ handle: (context, data) ->
 
     storage.lastFisher = fisher
 
-    debug "---------- #{NUMBER_OF_DAYS}-DAY FT MARGIN BOT ----------"
+    debug "---------- BuyTFdip's #{NUMBER_OF_DAYS}-DAY FT MARGIN BOT ----------"
     debug "Current Price: #{i.price.toFixed(8)} #{i._pair[1].toUpperCase()}"
     debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
     debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
     debug "Margin balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
-    debug ""
+    debug " "
     plot
         macdSignal: _.last(s)
     plot
