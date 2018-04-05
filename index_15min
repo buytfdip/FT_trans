@@ -1,69 +1,64 @@
-#15 Min Fisher Transform Advanced Bot
-#Created by buyTFdip
-trading = require 'trading'
+mt = require 'margin_trading'
 talib = require 'talib'
 params = require 'params'
 
-NUMBER_OF_DAYS = params.add "Number of days used for calculations", 1
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", 6
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
 CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
-RSI_BUY_LB = params.add "RSI buy look back period", 10
-MACD_BUY_LB = params.add "MACD buy look back period", 10
-RSI_SELL_LB = params.add "RSI sell look back period", 10
-MACD_SELL_LB = params.add "MACD sell look back period", 10
-BOOK_PROFIT_PCT = params.add "% gain before taking your profits (set to 0 to disable)", 20
-PCT_TO_BOOK = params.add "% of holdings to sell when booking profits", 100
-STOP_LOSS_PCT = params.add "% loss before stop loss order (set to 0 to disable)", 10
-PCT_OF_SPLIT = params.add "% iceberg split", 100
-MINIMUM_ORDER_VALUE = params.add "Minimum order value (exchange threshold)", .001
-ORDER_TYPE = params.addOptions 'Global order type', ['market', 'limit', 'iceberg'], 'market'
-ORDER_PRICE = params.add 'Global trades at [Market Price x]', 1
-ORDER_TYPE2 = params.addOptions 'Profit taking order type', ['market', 'limit', 'iceberg'], 'market'
-ORDER_PRICE2 = params.add 'Profit taking trades at [Market Price x]', 1
-ORDER_TYPE3 = params.addOptions 'Stop loss order type', ['market', 'limit', 'iceberg'], 'market'
-ORDER_PRICE3 = params.add 'Stop loss trades at [Market Price x]', 1
+SS_PCT = params.add "Short Stop Loss %", 10
+LS_PCT = params.add "Long Stop Loss %", 10
+LT_PCT = params.add "Short Profit Take %", 25
+ST_PCT = params.add "Long Stop Take %", 25
+
+class Margin
+
+    @OpenShort: (pos, instrument, shortPrice, shortAmount, marginInfo) ->
+        if (pos)
+            mt.closePosition instrument
+        if (mt.sell instrument, 'limit', shortAmount/shortPrice, shortPrice)
+            return true
+        return false
+
+    @OpenLong: (pos, instrument, longPrice, longAmount, marginInfo) ->
+        if (pos)
+            mt.closePosition instrument
+        if (mt.buy instrument, 'limit', longAmount/longPrice, longPrice)
+            return true
+        return false
+
+    @OpenPositionPL: (currentPrice, marginPosition) ->
+        pl = ((currentPrice - marginPosition.price)/marginPosition.price) * 100
+        if (marginPosition.amount < 0)
+            return -pl
+        else
+            return pl
+
+    @OpenPositionCurrentBalance: (currentPrice, startingBalance, marginPosition) ->
+        return (startingBalance + marginPosition.amount * (currentPrice - marginPosition.price))
 
 init: (context) ->
 
-    info "Thanks for using the #{NUMBER_OF_DAYS}-Day Fisher Transform Advanced Bot"
-    info "Please be patient while the bot waits for a signal"
-#plot marks
+    debug "BuyTFdip's #{NUMBER_OF_DAYS}-DAY FT MARGIN BOT is warming up"
+    debug "..."
+
     setPlotOptions
         Bought:
-            color: 'rgb(0, 204, 0)'
+            color: 'rgba(46, 204, 113, .80)'
         Sold:
-            color: 'rgb(230, 0, 0)'
-        Book_Profit:
-            color: 'rgb(255, 102, 0)'
-        Stop_Loss:
-            color: 'rgb(0, 0, 0)'
-        Bears:
-            color: 'rgba(192, 57, 43, .15)'
-            secondary: false
-            size: 5
-        Bulls:
-            color: 'rgba(39, 174, 96, .15)'
-            secondary: false
-            size: 5
-        MACD_Signal:
-            color: 'rgba(127, 63, 191, .50)'
-            size: 5
-            secondary: true
-            lineWidth: 3
-        RSI_Signal:
-            color: 'rgba(63, 127, 191, .50)'
-            size: 5
-            secondary: true
-            lineWidth: 3
+            color: 'rgba(231, 76, 60, .80)'
+        BookProfit:
+            color: 'rgba(231, 76, 60, .40)'
 
 handle: (context, data) ->
+    i = data.instruments[0]
+    info = mt.getMarginInfo i
+    pos = mt.getPosition i
     storage.consecutiveSellSignals ?= 0
     storage.consecutiveBuySignals ?= 0
     storage.wins ?= 0
     storage.losses ?= 0
     storage.sells ?= 0
     storage.sold ?= false
-    storage.stoploss ?= false
     storage.lastSellPrice ?= null
     storage.buys ?= 0
     storage.bought ?= false
@@ -71,17 +66,15 @@ handle: (context, data) ->
     storage.lastBuyPrice ?= null
     storage.lastValue ?= null
     storage.lastFisher ?= null
-    i = data.instruments[0]
-    startCurrency = @portfolio.positions[i.curr()].amount
-    startAssets = @portfolio.positions[i.asset()].amount
     longPeriod = Math.min(parseInt((24*60)/i.interval) * NUMBER_OF_DAYS, i.size - 1)
     shortPeriod = parseInt(longPeriod/3)
-
-    currentPrice = _.last(i.close)
-    currentWorth = startCurrency + startAssets * currentPrice
-
-    storage.initialWorth ?= currentWorth
-    storage.initialPrice ?= currentPrice
+    storage.shortPrice ?= null
+    storage.longPrice ?= null
+    storage.longPrice ?= null
+    storage.longTake ?= null
+    storage.shortTake ?= null
+    storage.longStop ?= null
+    storage.shortStop ?= null
 
     rsi = talib.RSI
         inReal: i.close
@@ -119,13 +112,13 @@ handle: (context, data) ->
         startIdx: 0
         endIdx: median.length - 1
         optInTimePeriod: longPeriod
-    
+
     high = _.last(high)
     low = _.last(low)
     median = _.last(median)
 
     value = (median - low) / (high - low)
-    
+
     value = .33 * 2 * (value - .5)
     if (storage.lastValue != null)
         value += (.67 * storage.lastValue)
@@ -136,7 +129,7 @@ handle: (context, data) ->
         value = -.9999
 
     storage.lastValue = value
-    
+
     value = (1 + value) / (1 - value)
 
     fisher = (.25 * Math.log(value))
@@ -147,270 +140,104 @@ handle: (context, data) ->
         if (fisher > storage.lastFisher)
             storage.consecutiveSellSignals = 0
             storage.consecutiveBuySignals += 1
-            plotMark
-                Bulls: _.last(i.high) * 1.03
 
-            minimumCurrency = i.price * MINIMUM_ORDER_VALUE
-#buy sequence
-            if (!storage.bought and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - MACD_BUY_LB] and _.last(rsi) > rsi[rsi.length - RSI_BUY_LB])
-                currentCurrency = startCurrency
-                currentAssets = startAssets
-
-                totalCurrencyToSpend = startCurrency
-                split = totalCurrencyToSpend
-
-                if (split < minimumCurrency)
-                    split = totalCurrencyToSpend
-
-                amountRemaining = totalCurrencyToSpend
-                infLoop = 0
-                while (infLoop++ < 100 and amountRemaining >= minimumCurrency)
-                    startingCurrency = @portfolio.positions[i.curr()].amount
-                    startingAssets = @portfolio.positions[i.asset()].amount
-
-                    ticker = trading.getTicker(i)
-                    buyAmount = Math.min((split/ticker.buy)*.99, amountRemaining/ticker.buy)
-                    price = (ticker.buy/ORDER_PRICE)
-                    try
-                        trading.buy i, ORDER_TYPE, buyAmount, price, 60 * @config.interval
-                    catch error
-                        if (/insufficient funds/i.exec(error))
-                            currentCurrency = startingCurrency
-                            currentAssets = startingAssets
-                            break
-
-                    sleep(30000)
-                    i.update
-                    currentCurrency = @portfolio.positions[i.curr()].amount
-                    currentAssets = @portfolio.positions[i.asset()].amount
-                    currencyDelta = (startingCurrency - currentCurrency)
-                    if (currencyDelta != 0)
-                        assetDelta = (currentAssets - startingAssets)
-                        salePrice = (i.price/ORDER_PRICE)
-                        info "Bought #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-                    amountRemaining -= currencyDelta
-
-                totalBought = (currentAssets - startAssets)
-                currencySpent = (startCurrency - currentCurrency)
-                salePrice = (i.price/ORDER_PRICE)
-                info "Bought a total of #{totalBought.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-                info "Finished Buying!"
-                storage.sold = false
-                storage.bought = true
-                storage.profitsbooked = false
+#long order
+            if (!storage.initializedL and !storage.longStop and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - 2] and _.last(rsi) > rsi[rsi.length - 2])
+                if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
+                    storage.startBalance = info.margin_balance
+                    storage.initializedL = true
+                    storage.initializedS = false
+                    storage.longPrice = i.price
+                    storage.shortStop = false
+                    storage.longStop = false
+                warn "Finished Long Order!"
+#stop loss
+            if (storage.initializedL and !storage.longStop and (i.price <= storage.longPrice / ( 1 + (LS_PCT/100))))
+            		LstopOrder = mt.addOrder
+              		instrument: i
+              		side: 'sell'
+              		type: 'limit'
+              		amount: info.tradable_balance
+              		price: i.price
+        	    	storage.initializedS = false
+        	    	storage.longStop = true
+            if SstopOrder
+                warn "Finished Long Stop Order!"
+#profit take
+            if (storage.initializedL and !storage.longTake and (i.price >= storage.longPrice * ( 1 + (LT_PCT/100))))
+                LtakeOrder = mt.addOrder
+                  instrument: i
+                  side: 'sell'
+                  type: 'limit'
+                  amount: info.tradable_balance
+                  price: i.price
+                storage.initializedS = false
+                storage.longTake = true
+            if LtakeOrder
+                warn "Finished Long Profit Take Order!"
                 storage.consecutiveBuySignals = 0
                 storage.consecutiveSellSignals = 0
-                storage.lastBuyPrice = salePrice
-                storage.buys++
 
-                plotMark
-                    Bought: salePrice
         else if (fisher < storage.lastFisher)
             storage.consecutiveSellSignals += 1
             storage.consecutiveBuySignals = 0
-            plotMark
-                Bears: _.last(i.low) * 0.97
-#sell sequence
-            if (!storage.sold and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - MACD_BUY_LB] and _.last(rsi) < rsi[rsi.length - RSI_BUY_LB])
-                currentCurrency = startCurrency
-                currentAssets = startAssets
 
-                totalAssetsToSell = startAssets
-                split = totalAssetsToSell
-
-                if (split < MINIMUM_ORDER_VALUE)
-                    split = totalAssetsToSell
-
-                amountRemaining = totalAssetsToSell
-                infLoop = 0
-                while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
-                    startingCurrency = @portfolio.positions[i.curr()].amount
-                    startingAssets = @portfolio.positions[i.asset()].amount
-
-                    ticker = trading.getTicker(i)
-                    sellAmount = Math.min(split*.9975, amountRemaining)
-                    price = (ticker.sell*ORDER_PRICE)
-                    try
-                        trading.sell i, ORDER_TYPE, sellAmount, price, 60 * @config.interval
-                    catch error
-                        if (/insufficient funds/i.exec(error))
-                            currentCurrency = startingCurrency
-                            currentAssets = startingAssets
-                            break
-
-                    sleep(30000)
-                    i.update
-                    currentCurrency = @portfolio.positions[i.curr()].amount
-                    currentAssets = @portfolio.positions[i.asset()].amount
-                    assetDelta = (startingAssets - currentAssets)
-                    if (assetDelta != 0)
-                        currencyDelta = (currentCurrency - startingCurrency)
-                        salePrice = (i.price*ORDER_PRICE)
-                        warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-                    amountRemaining -= assetDelta
-
-                totalSold = (startAssets - currentAssets)
-                currencyGain = (currentCurrency - startCurrency)
-                salePrice = (i.price*ORDER_PRICE)
-
-                warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-                warn "Finished Selling!"
-                storage.sold = true
-                storage.bought = false
-                storage.profitsbooked = false
+#short order
+            if (!storage.initializedS and !storage.shortStop and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - 2] and _.last(rsi) < rsi[rsi.length - 2])
+                if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
+                    storage.startBalance = info.margin_balance
+                    storage.initializedS = true
+                    storage.initializedL = false
+                    storage.shortPrice = i.price
+                    storage.shortStop = false
+                    storage.longStop = false
+                warn "Finished Short Order!"
+#stop loss
+            if (storage.initializedS and !storage.shortStop and (i.price >= storage.longPrice * ( 1 + (SS_PCT/100))))
+            		SstopOrder = mt.addOrder
+              		instrument: i
+              		side: 'buy'
+              		type: 'limit'
+              		amount: info.tradable_balance
+              		price: i.price
+        	    	storage.initializedS = false
+        	    	storage.shortStop = true
+            if SstopOrder
+                warn "Finished Short Stop Order!"
+#profit take
+            if (storage.initializedS and !storage.shortTake and (i.price <= storage.shortPrice / ( 1 + (ST_PCT/100))))
+                StakeOrder = mt.addOrder
+                  instrument: i
+                  side: 'buy'
+                  type: 'limit'
+                  amount: info.tradable_balance
+                  price: i.price
+                storage.initializedS = false
+                storage.shortTake = true
+            if StakeOrder
+                warn "Finished Short Profit Take Order!"
                 storage.consecutiveBuySignals = 0
                 storage.consecutiveSellSignals = 0
-                storage.lastSellPrice = salePrice
-                storage.sells++
-                if (storage.lastBuyPrice != null)
-                    if (salePrice > storage.lastBuyPrice)
-                        storage.wins++
-                    else
-                        storage.losses++
-                plotMark
-                    Sold: salePrice
+
         else
             storage.consecutiveBuySignals = 0
             storage.consecutiveSellSignals = 0
-#profit take sequence 1
-        if (BOOK_PROFIT_PCT > 0 and storage.bought and !storage.profitsbooked and (storage.lastBuyPrice *( 1 + (BOOK_PROFIT_PCT/100))) <= i.price)
-            info "Time to book profits!"
-            currentCurrency = startCurrency
-            currentAssets = startAssets
-
-            totalAssetsToSell = startAssets
-            split = totalAssetsToSell
-
-            if (split < MINIMUM_ORDER_VALUE)
-                split = totalAssetsToSell
-
-            amountRemaining = totalAssetsToSell
-            infLoop = 0
-            while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
-                startingCurrency = @portfolio.positions[i.curr()].amount
-                startingAssets = @portfolio.positions[i.asset()].amount
-
-                ticker = trading.getTicker(i)
-                sellAmount = Math.min(split*.9975, amountRemaining)
-                price = (ticker.sell*ORDER_PRICE2)
-                try
-                    trading.sell i, ORDER_TYPE2, sellAmount, price, 60 * @config.interval
-                catch error
-                    if (/insufficient funds/i.exec(error))
-                        currentCurrency = startingCurrency
-                        currentAssets = startingAssets
-                        break
-
-                sleep(30000)
-                i.update
-                currentCurrency = @portfolio.positions[i.curr()].amount
-                currentAssets = @portfolio.positions[i.asset()].amount
-                assetDelta = (startingAssets - currentAssets)
-                if (assetDelta != 0)
-                    currencyDelta = (currentCurrency - startingCurrency)
-                    salePrice = (i.price*ORDER_PRICE2)
-                    warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-                amountRemaining -= assetDelta
-
-            totalSold = (startAssets - currentAssets)
-            currencyGain = (currentCurrency - startCurrency)
-            salePrice = (i.price*ORDER_PRICE2)
-            warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-            warn "Finished Selling!"
-            storage.lastSellPrice = salePrice
-            storage.sells++
-            if (storage.lastBuyPrice != null)
-                if (salePrice > storage.lastBuyPrice)
-                    storage.wins++
-                else
-                    storage.losses++
-            plotMark
-                Book_Profit: salePrice
-            storage.profitsbooked = true
-            !storage.bought = false
-#stop loss sequence
-          if (STOP_LOSS_PCT > 0 and storage.bought and (storage.lastBuyPrice /( 1 + (STOP_LOSS_PCT/100))) >= i.price)
-            info "Stop loss initiated!"
-            currentCurrency = startCurrency
-            currentAssets = startAssets
-
-            totalAssetsToSell = startAssets
-            split = totalAssetsToSell
-
-            if (split < MINIMUM_ORDER_VALUE)
-                split = totalAssetsToSell
-
-            amountRemaining = totalAssetsToSell
-            infLoop = 0
-            while (infLoop++ < 100 and amountRemaining >= MINIMUM_ORDER_VALUE)
-                startingCurrency = @portfolio.positions[i.curr()].amount
-                startingAssets = @portfolio.positions[i.asset()].amount
-
-                ticker = trading.getTicker(i)
-                sellAmount = Math.min(split, amountRemaining)
-                price = (ticker.sell*ORDER_PRICE3)
-                try
-                    trading.sell i, ORDER_TYPE3, sellAmount, price, 60 * @config.interval
-                catch error
-                    if (/insufficient funds/i.exec(error))
-                        currentCurrency = startingCurrency
-                        currentAssets = startingAssets
-                        break
-
-                sleep(30000)
-                i.update
-                currentCurrency = @portfolio.positions[i.curr()].amount
-                currentAssets = @portfolio.positions[i.asset()].amount
-                assetDelta = (startingAssets - currentAssets)
-                if (assetDelta != 0)
-                    currencyDelta = (currentCurrency - startingCurrency)
-                    salePrice = (i.price*ORDER_PRICE3)
-                    warn "Sold #{assetDelta.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-                amountRemaining -= assetDelta
-
-            totalSold = (startAssets - currentAssets)
-            currencyGain = (currentCurrency - startCurrency)
-            salePrice = (i.price*ORDER_PRICE3)
-            warn "Sold a total of #{totalSold.toFixed(8)} #{i._pair[0].toUpperCase()} at #{salePrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-            warn "Finished Stop Loss Selling!"
-            storage.lastSellPrice = salePrice
-            storage.sells++
-            if (storage.lastBuyPrice != null)
-                if (salePrice > storage.lastBuyPrice)
-                    storage.wins++
-                else
-                    storage.losses++
-            plotMark
-                Stop_Loss: salePrice
-            storage.sold = true
-            storage.bought = false            
 
     storage.lastFisher = fisher
-#bot outputs
-    botPL = ((currentWorth - storage.initialWorth)/storage.initialWorth) * 100
-    marketPL = ((currentPrice - storage.initialPrice)/storage.initialPrice) * 100
 
-    info "---------- #{NUMBER_OF_DAYS}-Day | FT Advanced Bot ----------"
-    info "Current Price: #{currentPrice.toFixed(8)} #{i._pair[1].toUpperCase()}"
-    info "Exchange Wallet: #{startCurrency.toFixed(8)} #{i._pair[1].toUpperCase()} and #{startAssets.toFixed(8)} #{i._pair[0].toUpperCase()}"
-    info "Start Worth: #{storage.initialWorth.toFixed(8)} #{i._pair[1].toUpperCase()} or #{(storage.initialWorth/storage.initialPrice).toFixed(8)} #{i._pair[0].toUpperCase()}"
-    info "Current Worth: #{currentWorth.toFixed(8)} #{i._pair[1].toUpperCase()} or #{(currentWorth/currentPrice).toFixed(8)} #{i._pair[0].toUpperCase()}"
-    info "Current MACD Signal: #{_.last(s)}"
-    plot
-        MACD_Signal: _.last(s)
-    info "Current RSI Reading: #{_.last(rsi)}"
-    plot
-        RSI_Signal: _.last(rsi)
-    if (botPL >= 0)
-        info "Bot P/L: #{botPL.toFixed(2)}%"
-    else
-        warn "Bot P/L: #{botPL.toFixed(2)}%"
+    debug "---------- BuyTFdip's #{NUMBER_OF_DAYS}-DAY FT MARGIN BOT ----------"
+    debug "Current Price: #{i.price.toFixed(8)} #{i._pair[1].toUpperCase()}"
+    debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
+    debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
+    debug "Margin balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
+    debug "Tradeable balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
+    debug " "
 
-    if (marketPL >= 0)
-        info "Buy&Hold P/L: #{marketPL.toFixed(2)}%"
-    else
-        warn "Buy&Hold P/L: #{marketPL.toFixed(2)}%"
-
-    info "Buys: #{storage.buys} Sells: #{storage.sells} Total Orders: #{storage.buys + storage.sells}"
-    info "Wins: #{storage.wins} Losses: #{storage.losses} Total Trades: #{storage.wins + storage.losses}"
-    info " "
+onStop: ->
+    i = @data.instruments[0]
+    # unlike orders open positions don't get cancelled when the bot is stopped
+    # the below snippet can be used to programmatically close it
+    pos = mt.getPosition i
+    if pos
+        debug "Closing position"
+        mt.closePosition i
