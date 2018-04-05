@@ -36,8 +36,8 @@ class Margin
         
 init: (context) ->
 
-    debug "Thanks for using the #{NUMBER_OF_DAYS}-DAY FT MARGIN BOT"
-    debug "Please be patient while the bot waits for a signal"
+    debug "buyTFdip's #{NUMBER_OF_DAYS}-DAY FT MARGIN BOT is warming up!"
+    debug "..."
 
     setPlotOptions
         bought:
