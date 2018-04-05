@@ -1,0 +1,235 @@
+mt = require 'margin_trading' 
+talib = require 'talib'
+params = require 'params'
+
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", 3
+CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
+SS_PCT = params.add "Short Stop %", 12
+LS_PCT = params.add "Long Stop %", 12
+
+class Margin
+
+    @OpenShort: (pos, instrument, shortPrice, shortAmount, marginInfo) ->
+        if (pos)
+            mt.closePosition instrument
+        if (mt.sell instrument, 'limit', shortAmount/shortPrice, shortPrice)
+            return true
+        return false
+
+    @OpenLong: (pos, instrument, longPrice, longAmount, marginInfo) ->
+        if (pos)
+            mt.closePosition instrument
+        if (mt.buy instrument, 'limit', longAmount/longPrice, longPrice)
+            return true
+        return false
+
+    @OpenPositionPL: (currentPrice, marginPosition) ->
+        pl = ((currentPrice - marginPosition.price)/marginPosition.price) * 100
+        if (marginPosition.amount < 0)
+            return -pl
+        else
+            return pl
+
+    @OpenPositionCurrentBalance: (currentPrice, startingBalance, marginPosition) ->
+        return (startingBalance + marginPosition.amount * (currentPrice - marginPosition.price))
+        
+init: (context) ->
+
+    debug "Thanks for using the #{NUMBER_OF_DAYS}-DAY FT MARGIN BOT"
+    debug "Please be patient while the bot waits for a signal"
+
+    setPlotOptions
+        bought:
+            color: 'rgba(46, 204, 113, .80)'
+        sold:
+            color: 'rgba(231, 76, 60, .80)'
+        bookProfit:
+            color: 'rgba(231, 76, 60, .40)'
+        bears:
+            color: 'rgba(192, 57, 43, .15)'
+            secondary: false
+            size: 5
+        bulls:
+            color: 'rgba(39, 174, 96, .15)'
+            secondary: false
+            size: 5
+        macdSignal:
+            color: 'rgba(127, 63, 191, .50)'
+            size: 5
+            secondary: true
+            lineWidth: 3
+        rsiSignal:
+            color: 'rgba(63, 127, 191, .50)'
+            size: 5
+            secondary: true
+            lineWidth: 3
+
+handle: (context, data) ->
+    i = data.instruments[0]
+    info = mt.getMarginInfo i
+    pos = mt.getPosition i	
+    storage.consecutiveSellSignals ?= 0
+    storage.consecutiveBuySignals ?= 0
+    storage.wins ?= 0
+    storage.losses ?= 0
+    storage.sells ?= 0
+    storage.sold ?= false
+    storage.lastSellPrice ?= null
+    storage.buys ?= 0
+    storage.bought ?= false
+    storage.profitsbooked ?= false
+    storage.lastBuyPrice ?= null
+    storage.lastValue ?= null
+    storage.lastFisher ?= null
+    longPeriod = Math.min(parseInt((24*60)/i.interval) * NUMBER_OF_DAYS, i.size - 1)
+    shortPeriod = parseInt(longPeriod/3)
+    storage.shortPrice ?= null
+    storage.longPrice ?= null
+    storage.longPrice ?= null
+    storage.longStop ?= null
+    storage.shortStop ?= null
+
+    rsi = talib.RSI
+        inReal: i.close
+        startIdx: 0
+        endIdx: i.close.length - 1
+        optInTimePeriod: longPeriod
+
+    macd = talib.MACD
+        inReal: i.close
+        startIdx: 0
+        endIdx: i.close.length - 1
+        optInFastPeriod: shortPeriod
+        optInSlowPeriod: longPeriod
+        optInSignalPeriod: shortPeriod
+
+    m = macd.outMACD
+    s = macd.outMACDSignal
+    h = macd.outMACDHist
+
+    median = talib.MEDPRICE
+        high: i.high
+        low: i.low
+        startIdx: i.high.length - 1 - longPeriod
+        endIdx: i.high.length - 1
+
+    high = talib.MAX
+        inReal: median
+        startIdx: 0
+        endIdx: median.length - 1
+        optInTimePeriod: longPeriod
+
+
+    low = talib.MIN
+        inReal: median
+        startIdx: 0
+        endIdx: median.length - 1
+        optInTimePeriod: longPeriod
+
+    high = _.last(high)
+    low = _.last(low)
+    median = _.last(median)
+
+    value = (median - low) / (high - low)
+
+    value = .33 * 2 * (value - .5)
+    if (storage.lastValue != null)
+        value += (.67 * storage.lastValue)
+
+    if (value > .9999)
+        value = .9999
+    else if (value < -.9999)
+        value = -.9999
+
+    storage.lastValue = value
+
+    value = (1 + value) / (1 - value)
+
+    fisher = (.25 * Math.log(value))
+
+    if (storage.lastFisher != null)
+        fisher +=  (.5 * storage.lastFisher)
+
+        if (fisher > storage.lastFisher)
+            storage.consecutiveSellSignals = 0
+            storage.consecutiveBuySignals += 1
+            plotMark
+                bulls: _.last(i.high) * 1.03
+
+            if (!storage.initializedL and !storage.longStop and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - 2] and _.last(rsi) > rsi[rsi.length - 2])
+                if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
+                    storage.startBalance = info.margin_balance
+                    storage.initializedL = true
+                    storage.initializedS = false
+                    storage.longPrice = i.price
+                    storage.shortStop = false
+                    storage.longStop = false
+                warn "Finished Short Order!"
+            if storage.initializedL and !storage.longStop
+            		LstopOrder = mt.addOrder 
+              		instrument: i
+              		side: 'sell'
+              		type: 'limit'
+              		amount: info.tradable_balance
+              		price: storage.longPrice * 0.LS_PCT
+        	    	storage.initializedS = false
+        	    	storage.longStop = true
+            if SstopOrder
+                warn "Finished Long Stop Order!"  
+                storage.consecutiveBuySignals = 0
+                storage.consecutiveSellSignals = 0
+
+        else if (fisher < storage.lastFisher)
+            storage.consecutiveSellSignals += 1
+            storage.consecutiveBuySignals = 0
+            plotMark
+                bears: _.last(i.low) * 0.97
+            if (!storage.initializedS and !storage.shortStop and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - 2] and _.last(rsi) < rsi[rsi.length - 2])
+                if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
+                    storage.startBalance = info.margin_balance
+                    storage.initializedS = true
+                    storage.initializedL = false
+                    storage.shortPrice = i.price
+                    storage.shortStop = false
+                    storage.longStop = false
+                warn "Finished Short Order!"
+            if storage.initializedS and !storage.shortStop
+            		SstopOrder = mt.addOrder 
+              		instrument: i
+              		side: 'buy'
+              		type: 'limit'
+              		amount: info.tradable_balance
+              		price: storage.shortPrice * 1.SS_PCT
+        	    	storage.initializedS = false
+        	    	storage.shortStop = true
+            if SstopOrder
+                    warn "Finished Short Stop Order!"              
+                    storage.consecutiveBuySignals = 0
+                    storage.consecutiveSellSignals = 0
+        else
+            storage.consecutiveBuySignals = 0
+            storage.consecutiveSellSignals = 0  
+
+    storage.lastFisher = fisher
+
+    debug "---------- #{NUMBER_OF_DAYS}-DAY FT MARGIN BOT ----------"
+    debug "Current Price: #{i.price.toFixed(8)} #{i._pair[1].toUpperCase()}"
+    debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
+    debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
+    debug "Margin balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
+    debug "Tradeable balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
+    debug "----------------------------------------------"
+    plot
+        macdSignal: _.last(s)
+    plot
+        rsiSignal: _.last(rsi)
+
+onStop: ->
+    i = @data.instruments[0]
+    # unlike orders open positions don't get cancelled when the bot is stopped
+    # the below snippet can be used to programmatically close it
+    pos = mt.getPosition i
+    if pos
+        debug "Closing position"
+        mt.closePosition i
