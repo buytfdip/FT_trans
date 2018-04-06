@@ -8,9 +8,9 @@ NUMBER_OF_DAYS = params.add "Number of days used for calculations", 3
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 5
 CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 5
 SS_PCT = params.add "Short Order Stop Loss % (0 = Disable)", 0
+ST_PCT = params.add "Short Order Profit Take % (0 = Disable)", 0
 LS_PCT = params.add "Long Order Stop Loss % (0 = Disable)", 0
 LT_PCT = params.add "Long Order Profit Take % (0 = Disable)", 0
-ST_PCT = params.add "Short Order Profit Take % (0 = Disable)", 0
 
 class Margin
 
