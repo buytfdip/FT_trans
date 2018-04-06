@@ -4,7 +4,7 @@ mt = require 'margin_trading'
 talib = require 'talib'
 params = require 'params'
 
-NUMBER_OF_DAYS = params.add "Number of days used for calculations", 6
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", 3
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
 CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
 SS_PCT = params.add "Short Stop Loss %", 7.5
@@ -146,7 +146,7 @@ handle: (context, data) ->
             storage.consecutiveBuySignals += 1
 
 #long order
-            if (!storage.initializedL and !storage.longStop and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(s) > s[s.length - 2] and _.last(rsi) > rsi[rsi.length - 2])
+            if (!storage.initializedL and !storage.longStop and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(rsi) > rsi[rsi.length - 4])
                 if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
                     storage.startBalance = info.margin_balance
                     storage.initializedL = true
@@ -195,7 +195,7 @@ handle: (context, data) ->
             storage.consecutiveBuySignals = 0
 
 #short order
-            if (!storage.initializedS and !storage.shortStop and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(s) < s[s.length - 2] and _.last(rsi) < rsi[rsi.length - 2])
+            if (!storage.initializedS and !storage.shortStop and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(rsi) < rsi[rsi.length - 4])
                 if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
                     storage.startBalance = info.margin_balance
                     storage.initializedS = true
