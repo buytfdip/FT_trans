@@ -7,10 +7,10 @@ params = require 'params'
 NUMBER_OF_DAYS = params.add "Number of days used for calculations", 3
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 5
 CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 5
-SS_PCT = params.add "Short Order Stop Loss % (0 = Disable)", 0
-ST_PCT = params.add "Short Order Profit Take % (0 = Disable)", 0
-LS_PCT = params.add "Long Order Stop Loss % (0 = Disable)", 0
-LT_PCT = params.add "Long Order Profit Take % (0 = Disable)", 0
+SS_PCT = params.add "Short Order Stop Loss % (0 = Disable)", 5
+LS_PCT = params.add "Long Order Stop Loss % (0 = Disable)", 5
+LT_PCT = params.add "Long Order Profit Take % (0 = Disable)", 15
+ST_PCT = params.add "Short Order Profit Take % (0 = Disable)", 15
 
 class Margin
 
@@ -146,8 +146,8 @@ handle: (context, data) ->
             storage.consecutiveBuySignals += 1
 
 #long order
-            if (!storage.initializedL and !storage.longStop and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(rsi) > rsi[rsi.length - 4])
-                if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
+            if (!storage.initializedL and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(rsi) > rsi[rsi.length - 4])
+                if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance * 0.9975, info))
                     storage.startBalance = info.margin_balance
                     storage.initializedL = true
                     storage.initializedS = false
@@ -165,10 +165,10 @@ handle: (context, data) ->
               		instrument: i
               		side: 'sell'
               		type: 'limit'
-              		amount: pos.amount
+              		amount: (pos.amount * 0.9975)
               		price: i.price
         	    	storage.initializedS = false
-        	    	storage.longStop = true
+        	    	storage.initializedL = false
             if LstopOrder
                 warn "Stop Loss Closed Your Long Order!"
                 plotMark
@@ -181,10 +181,10 @@ handle: (context, data) ->
                   instrument: i
                   side: 'sell'
                   type: 'limit'
-                  amount: pos.amount
+                  amount: (pos.amount * 0.9975)
                   price: i.price
                 storage.initializedS = false
-                storage.longTake = true
+                storage.initializedL = false
             if LtakeOrder
                 warn "Profit Take Closed Your Long Order!"
                 plotMark
@@ -197,8 +197,8 @@ handle: (context, data) ->
             storage.consecutiveBuySignals = 0
 
 #short order
-            if (!storage.initializedS and !storage.shortStop and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(rsi) < rsi[rsi.length - 4])
-                if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
+            if (!storage.initializedS and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(rsi) < rsi[rsi.length - 4])
+                if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance * 0.9975, info))
                     storage.startBalance = info.margin_balance
                     storage.initializedS = true
                     storage.initializedL = false
@@ -216,10 +216,10 @@ handle: (context, data) ->
               		instrument: i
               		side: 'buy'
               		type: 'limit'
-              		amount: pos.amount
+              		amount: (pos.amount * -0.9975)
               		price: i.price
         	    	storage.initializedS = false
-        	    	storage.shortStop = true
+        	    	storage.initializedL = false
             if SstopOrder
                 warn "Stop Loss Closed Your Short Order!"
                 plotMark
@@ -232,10 +232,10 @@ handle: (context, data) ->
                   instrument: i
                   side: 'buy'
                   type: 'limit'
-                  amount: pos.amount
+                  amount: (pos.amount * -0.9975)
                   price: i.price
                 storage.initializedS = false
-                storage.shortTake = true
+                storage.initializedL = false
             if StakeOrder
                 warn "Profit Take Closed Your Short Order!"
                 plotMark
