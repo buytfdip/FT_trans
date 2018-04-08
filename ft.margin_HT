@@ -13,6 +13,7 @@ LT_PCT = params.add "Long Order Profit Take % (0 = Disable)", 0
 ST_PCT = params.add "Short Order Profit Take % (0 = Disable)", 0
 HT_LL = params.add "HT Long Lookback Period (2 & Up)", 2
 HT_LS = params.add "HT Short Lookback Period (2 & Up)", 2
+TIME = params.add "HT Time Period (2 & Up)", 5
 
 class Margin
 
@@ -87,7 +88,7 @@ handle: (context, data) ->
         inReal: i.close
         startIdx: 0
         endIdx: i.close.length - 1
-        optInTimePeriod: shortPeriod
+        optInTimePeriod: TIME
 
     median = talib.MEDPRICE
         high: i.high
