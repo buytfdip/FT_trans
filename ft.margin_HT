@@ -11,6 +11,8 @@ SS_PCT = params.add "Short Order Stop Loss % (0 = Disable)", 0
 LS_PCT = params.add "Long Order Stop Loss % (0 = Disable)", 0
 LT_PCT = params.add "Long Order Profit Take % (0 = Disable)", 0
 ST_PCT = params.add "Short Order Profit Take % (0 = Disable)", 0
+HT_LL = params.add "HT Long Lookback Period (2 & Up)", 2
+HT_LS = params.add "HT Short Lookback Period (2 & Up)", 2
 
 class Margin
 
@@ -135,7 +137,7 @@ handle: (context, data) ->
             storage.consecutiveBuySignals += 1
 
 #long order
-            if (!storage.initializedL and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(HT) > HT[HT.length - 4])
+            if (!storage.initializedL and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(HT) > HT[HT.length - HT_LL])
                 if storage.invested
                         debug "Closing Short Position.."
                         try mt.closePosition i
@@ -194,7 +196,7 @@ handle: (context, data) ->
             storage.consecutiveBuySignals = 0
 
 #short order
-            if (!storage.initializedS and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(HT) < HT[HT.length - 4])
+            if (!storage.initializedS and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(HT) < HT[HT.length - HT_LS])
                 if storage.invested
                         debug "Closing Long Position.."
                         try mt.closePosition i
