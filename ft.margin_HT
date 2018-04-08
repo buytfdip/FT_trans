@@ -11,9 +11,10 @@ SS_PCT = params.add "Short Order Stop Loss % (0 = Disable)", 0
 LS_PCT = params.add "Long Order Stop Loss % (0 = Disable)", 0
 LT_PCT = params.add "Long Order Profit Take % (0 = Disable)", 0
 ST_PCT = params.add "Short Order Profit Take % (0 = Disable)", 0
-HT_LL = params.add "HT Long Lookback Period (2 & Up)", 2
-HT_LS = params.add "HT Short Lookback Period (2 & Up)", 2
-TIME = params.add "HT Time Period (2 & Up)", 5
+TRI_LL = params.add "TRIMA Long Lookback Period (2 & Up)", 2
+TRI_LS = params.add "TRIMA Short Lookback Period (2 & Up)", 2
+TIME = params.add "1st Indicators Time Period", 5
+TIME2 = params.add "2nd Indicators Time Period", 15
 
 class Margin
 
@@ -84,11 +85,18 @@ handle: (context, data) ->
     storage.shortStop ?= null
     storage.invested ?= null
 
-    HT = talib.TRIMA
+    TRI = talib.TRIMA
         inReal: i.close
         startIdx: 0
         endIdx: i.close.length - 1
         optInTimePeriod: TIME
+
+    IMI = talib.IMI
+        open: i.open
+        close: i.close
+        startIdx: 0
+        endIdx: i.close.length - 1
+        optInTimePeriod: TIME2
 
     median = talib.MEDPRICE
         high: i.high
@@ -138,7 +146,7 @@ handle: (context, data) ->
             storage.consecutiveBuySignals += 1
 
 #long order
-            if (!storage.initializedL and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(HT) > HT[HT.length - HT_LL])
+            if (!storage.initializedL and storage.consecutiveBuySignals >= CONSECUTIVE_BUY_SIGNALS and _.last(TRI) > TRI[TRI.length - TRI_LL])
                 if storage.invested
                         debug "Closing Short Position.."
                         try mt.closePosition i
@@ -197,7 +205,7 @@ handle: (context, data) ->
             storage.consecutiveBuySignals = 0
 
 #short order
-            if (!storage.initializedS and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(HT) < HT[HT.length - HT_LS])
+            if (!storage.initializedS and storage.consecutiveSellSignals >= CONSECUTIVE_SELL_SIGNALS and _.last(TRI) < TRI[TRI.length - TRI_LS])
                 if storage.invested
                         debug "Closing Long Position.."
                         try mt.closePosition i
@@ -259,13 +267,21 @@ handle: (context, data) ->
 
     debug "---------- BuyTFdip's DOPE A$$ MARGIN BOT ----------"
     debug "Current Price: #{i.price.toFixed(8)} #{i._pair[1].toUpperCase()}"
-    debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
-    debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
+    if !pos
+        debug "Current Position: 0.0 #{i._pair[0].toUpperCase()}  0.0 #{i._pair[1].toUpperCase()}"
+    if pos
+        debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
+    if !pos
+        debug "Current Position P/L: N/A"
+    if pos
+        debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
     debug "Margin balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
     debug " "
     plot
-        TRIMA: _.last(HT)    
+        TRIMA: _.last(TRI)    
+    plot
+        IMI: _.last(IMI)    
 
 onStop: ->
     i = @data.instruments[0]
