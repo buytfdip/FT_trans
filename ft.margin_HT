@@ -162,7 +162,7 @@ handle: (context, data) ->
               		instrument: i
               		side: 'sell'
               		type: 'limit'
-              		amount: pos.amount
+              		amount: pos.amount * .9999 
               		price: i.price
         	    	storage.initializedS = false
         	    	storage.longStop = true
@@ -179,7 +179,7 @@ handle: (context, data) ->
                   instrument: i
                   side: 'sell'
                   type: 'limit'
-                  amount: pos.amount
+                  amount: pos.amount * .9999
                   price: i.price
                 storage.initializedS = false
                 storage.longTake = true
@@ -221,7 +221,7 @@ handle: (context, data) ->
               		instrument: i
               		side: 'buy'
               		type: 'limit'
-              		amount: (pos.amount * -1)
+              		amount: (pos.amount * -.9999)
               		price: i.price
         	    	storage.initializedS = false
         	    	storage.shortStop = true
@@ -238,7 +238,7 @@ handle: (context, data) ->
                   instrument: i
                   side: 'buy'
                   type: 'limit'
-                  amount: (pos.amount * -1)
+                  amount: (pos.amount * -.9999)
                   price: i.price
                 storage.initializedS = false
                 storage.shortTake = true
