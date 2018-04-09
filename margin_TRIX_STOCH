@@ -4,7 +4,7 @@ mt = require 'margin_trading'
 talib = require 'talib'
 params = require 'params'
 
-NUMBER_OF_DAYS = params.add "Number of days used for calculations", 3
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", 6
 CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
 CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
 SS_PCT = params.add "Short Order Stop Loss % (0 = Disable)", 5
@@ -12,6 +12,19 @@ LS_PCT = params.add "Long Order Stop Loss % (0 = Disable)", 5
 LT_PCT = params.add "Long Order Profit Take % (0 = Disable)", 15
 ST_PCT = params.add "Short Order Profit Take % (0 = Disable)", 15
 TIME = params.add "TRIX Time Period", 15
+S_MA = params.add "RSI MA TYPE", 2
+#
+#MA_Type:
+#   0 = SMA (Simple Moving Average)
+#   1 = EMA (Exponential Moving Average)
+#   2 = WMA (Weighted Moving Average)
+#   3 = DEMA (Double Exponential Moving Average)
+#   4 = TEMA (Triple Exponential Moving Average)
+#   5 = TRIMA (Triangular Moving Average)
+#   6 = KAMA (Kaufman Adaptive Moving Average)
+#   7 = MAMA (MESA Adaptive Moving Average)
+#   8 = T3 (Triple Exponential Moving Average)
+#   Default=SMA if not provided
 
 class Margin
 
@@ -53,6 +66,21 @@ init: (context) ->
             color: 'rgb(0, 0, 0)'
         "Take Profit":
             color: 'rgb(255, 128, 0)'
+        "STOCH K":
+            color: 'red'
+            size: 1
+            secondary: true
+            lineWidth: .5
+        "STOCH D":
+            color: 'blue'
+            size: 1
+            secondary: true
+            lineWidth: .5
+        "TRIX":
+            color: 'rgba(0, 0, 0, .50)'
+            size: 1
+            secondary: true
+            lineWidth: .5
 
 handle: (context, data) ->
     i = data.instruments[0]
@@ -88,17 +116,28 @@ handle: (context, data) ->
         endIdx: i.close.length - 1
         optInTimePeriod: TIME
 
-    macd = talib.MACD
+    RSI = talib.STOCHRSI
         inReal: i.close
         startIdx: 0
         endIdx: i.close.length - 1
-        optInFastPeriod: shortPeriod
-        optInSlowPeriod: longPeriod
-        optInSignalPeriod: shortPeriod
+        optInTimePeriod: longPeriod
+        optInFastK_Period: shortPeriod
+        optInFastD_Period: longPeriod
+#MA_Type:
+#   0 = SMA (Simple Moving Average)
+#   1 = EMA (Exponential Moving Average)
+#   2 = WMA (Weighted Moving Average)
+#   3 = DEMA (Double Exponential Moving Average)
+#   4 = TEMA (Triple Exponential Moving Average)
+#   5 = TRIMA (Triangular Moving Average)
+#   6 = KAMA (Kaufman Adaptive Moving Average)
+#   7 = MAMA (MESA Adaptive Moving Average)
+#   8 = T3 (Triple Exponential Moving Average)
+#   Default=SMA if not provided
+        optInFastD_MAType: S_MA        
 
-    m = macd.outMACD
-    s = macd.outMACDSignal
-    h = macd.outMACDHist
+        K: RSI.outFastK
+        D: RSI.outFastD
 
     median = talib.MEDPRICE
         high: i.high
@@ -266,6 +305,11 @@ handle: (context, data) ->
     debug " "
     plot
         "TRIX": _.last(TRIX)                
+    plot
+        "STOCH K": _.last(K)                
+    plot
+        "STOCH D": _.last(D)
+
 #close postions on bot stop
 onStop: ->
     i = @data.instruments[0]
