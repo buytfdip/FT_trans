@@ -1,11 +1,20 @@
-mt = require 'margin_trading' 
+# BuyTFdip's DOPE A$$ MARGIN BOT
+
+mt = require 'margin_trading'
 talib = require 'talib'
 params = require 'params'
 
-ACC_P = params.add "Acc Bands period", 100
-S_PROFIT_PCT = params.add "Short Profit %", 25
-L_PROFIT_PCT = params.add "Long Profit %", 25
-	
+NUMBER_OF_DAYS = params.add "Number of days used for calculations", 3
+CONSECUTIVE_BUY_SIGNALS = params.add "Consecutive buy signals required", 1
+CONSECUTIVE_SELL_SIGNALS = params.add "Consecutive sell signals required", 1
+SS_PCT = params.add "Short Order Stop Loss % (0 = Disable)", 0
+LS_PCT = params.add "Long Order Stop Loss % (0 = Disable)", 0
+LT_PCT = params.add "Long Order Profit Take % (0 = Disable)", 0
+ST_PCT = params.add "Short Order Profit Take % (0 = Disable)", 0
+ACC_P = params.add "ACC Bands Time Period", 35
+TIME = params.add "TRIX Time Period", 15
+TIME2 = params.add "CMO Time Period", 100
+
 class Margin
 
     @OpenShort: (pos, instrument, shortPrice, shortAmount, marginInfo) ->
@@ -32,20 +41,65 @@ class Margin
     @OpenPositionCurrentBalance: (currentPrice, startingBalance, marginPosition) ->
         return (startingBalance + marginPosition.amount * (currentPrice - marginPosition.price))
 
-init: -> 	
-    #Initialize things
-    storage.initializedS ?= false
-    storage.initializedL ?= false
+init: (context) ->
 
-handle: ->
-    i = @data.instruments[0]
+    warn "BuyTFdip's DOPE A$$ MARGIN BOT is warming up"
+    debug "..."
+
+    setPlotOptions
+        Bought:
+            color: 'rgb(46, 204, 113)'
+        Sold:
+            color: 'rgb(231, 76, 60)'
+        "Stop Loss":
+            color: 'rgb(0, 0, 0)'
+        "Take Profit":
+            color: 'rgb(255, 128, 0)'
+        "TRIX":
+            color: 'rgba(0, 0, 0, .50)'
+            size: 1
+            secondary: true
+            lineWidth: .5
+
+handle: (context, data) ->
+    i = data.instruments[0]
     info = mt.getMarginInfo i
-    pos = mt.getPosition i	
+    pos = mt.getPosition i
+    storage.consecutiveSellSignals ?= 0
+    storage.consecutiveBuySignals ?= 0
+    storage.wins ?= 0
+    storage.losses ?= 0
+    storage.sells ?= 0
+    storage.sold ?= false
+    storage.lastSellPrice ?= null
+    storage.buys ?= 0
+    storage.bought ?= false
+    storage.profitsbooked ?= false
+    storage.lastBuyPrice ?= null
+    storage.lastValue ?= null
+    storage.lastFisher ?= null
+    longPeriod = Math.min(parseInt((24*60)/i.interval) * NUMBER_OF_DAYS, i.size - 1)
+    shortPeriod = parseInt(longPeriod/3)
     storage.shortPrice ?= null
     storage.longPrice ?= null
+    storage.longPrice ?= null
+    storage.longTake ?= null
+    storage.shortTake ?= null
+    storage.longStop ?= null
+    storage.shortStop ?= null
+    storage.invested ?= null
 
-#ACC BANDS   
-    results = talib.ACCBANDS
+#indicators
+
+#Kaufman Adaptive Moving Average
+    TRIX = talib.TRIX
+        inReal: i.close
+        startIdx: 0
+        endIdx: i.close.length - 1
+        optInTimePeriod: TIME
+        
+#Acceleration Bands   
+    ACC = talib.ACCBANDS
 	      high: i.high
 	      low: i.low
 	      close: i.close
@@ -53,54 +107,219 @@ handle: ->
 	      endIdx: i.high.length - 1
 	      optInTimePeriod: ACC_P
     
-    uB = results.outRealUpperBand
-    mB = results.outRealMiddleBand
-    lB = results.outRealLowerBand   
-#short	    
-    if (!storage.initializedS and (i.price >= _.last(uB)))
-        if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
-            storage.startBalance = info.margin_balance
-            storage.initializedS = true
-            storage.initializedL = false
-            storage.shortPrice = i.price
-        warn "Finished Short Order!"
-#long	            	            
-    if (!storage.initializedL and (i.price <= _.last(lB)))
-        if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
-            storage.startBalance = info.margin_balance
-            storage.initializedL = true
-            storage.initializedS = false
-            storage.longPrice = i.price
-        warn "Finished Long Order!"
-            	            
-    if (S_PROFIT_PCT > 0 and storage.initializedS and (storage.shortPrice /( 1 + (S_PROFIT_PCT/100))) >= i.price)
-        (mt.buy i, 'limit', i.price, info.tradable_balance, info)
-        storage.invested = false
-    warn "Finished Short Profit Take!"
+    uB = ACC.outRealUpperBand
+    mB = ACC.outRealMiddleBand
+    lB = ACC.outRealLowerBand   
+
+#Chande Momentum Osc
+    CMO = talib.CMO
+        inReal: i.close
+        startIdx: 0
+        endIdx: i.close.length - 1
+        optInTimePeriod: TIME2
+
+    median = talib.MEDPRICE
+        high: i.high
+        low: i.low
+        startIdx: i.high.length - 1 - longPeriod
+        endIdx: i.high.length - 1
+
+    high = talib.MAX
+        inReal: median
+        startIdx: 0
+        endIdx: median.length - 1
+        optInTimePeriod: longPeriod
 
 
-    if (L_PROFIT_PCT > 0 and storage.initializedL and (storage.longPrice *( 1 + (L_PROFIT_PCT/100))) >= i.price)
-        (mt.sell i, 'limit', i.price, info.tradable_balance, info)
-        storage.invested = false
-    warn "Finished Long Profit Take!"
+    low = talib.MIN
+        inReal: median
+        startIdx: 0
+        endIdx: median.length - 1
+        optInTimePeriod: longPeriod
+#ft math
+    high = _.last(high)
+    low = _.last(low)
+    median = _.last(median)
 
-#plot print
-    debug "---------- BuyTFdip's BOT ----------"
-    debug "Current Price: #{i.price}"
-    debug "Margin balance: #{info.margin_balance}"
-    debug "Tradeable balance: #{info.tradable_balance}"
-    debug "----------------------------------------------"
-    debug "Upper Accelation Band: #{_.last(uB)}"
+    value = (median - low) / (high - low)
+
+    value = .33 * 2 * (value - .5)
+    if (storage.lastValue != null)
+        value += (.67 * storage.lastValue)
+
+    if (value > .9999)
+        value = .9999
+    else if (value < -.9999)
+        value = -.9999
+
+    storage.lastValue = value
+
+    value = (1 + value) / (1 - value)
+
+    fisher = (.25 * Math.log(value))
+
+    if (storage.lastFisher != null)
+        fisher +=  (.5 * storage.lastFisher)
+
+        if (fisher > storage.lastFisher)
+            storage.consecutiveSellSignals = 0
+            storage.consecutiveBuySignals += 1
+
+            price = i.open[i.open.length - 1]
+            lastPrice = i.open[i.open.length - 2]
+            lBand = _.last(lB)
+            uBand = _.last(uB)
+            l_lBand = lB[lB.length - 2]
+            l_uBand = uB[uB.length - 2]
+            
+#long order
+            if (!storage.initializedL and (lastPrice < l_lBand) and (price >= lBand))
+                if storage.invested
+                        debug "Closing Short Position.."
+                        try mt.closePosition i
+                        warn "Finished Closing Short Position!"
+                        storage.invested = false
+                else if !storage.invested
+                        try
+                            if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance * 0.9975, info))
+                                storage.startBalance = info.margin_balance
+                                storage.initializedL = true
+                                storage.initializedS = false
+                                storage.longPrice = i.price
+                                storage.shortStop = false
+                                storage.longStop = false
+                                storage.invested = true
+                            warn "Finished Long Order!"
+                            storage.consecutiveBuySignals = 0
+                            storage.consecutiveSellSignals = 0
+#long stop loss
+            if (LS_PCT > 0 and storage.initializedL and storage.invested and (i.price <= storage.longPrice / ( 1 + (LS_PCT/100))))
+            		LstopOrder = mt.addOrder
+              		instrument: i
+              		side: 'sell'
+              		type: 'limit'
+              		amount: pos.amount * .9999 
+              		price: i.price
+        	    	storage.initializedS = false
+        	    	storage.longStop = true
+        	    	storage.invested = false
+            if LstopOrder
+                warn "Finished Long Stop Order!"
+                plotMark
+                    "Stop Loss": i.price
+                storage.consecutiveBuySignals = 0
+                storage.consecutiveSellSignals = 0
+#long profit take
+            if (LT_PCT > 0 and storage.initializedL and storage.invested and (i.price >= storage.longPrice * ( 1 + (LT_PCT/100))))
+                LtakeOrder = mt.addOrder
+                  instrument: i
+                  side: 'sell'
+                  type: 'limit'
+                  amount: pos.amount * .9999
+                  price: i.price
+                storage.initializedS = false
+                storage.longTake = true
+                storage.invested = false
+            if LtakeOrder
+                warn "Finished Long Profit Take Order!"
+                plotMark
+                    "Take Profit": i.price
+                storage.consecutiveBuySignals = 0
+                storage.consecutiveSellSignals = 0
+
+        else if (fisher < storage.lastFisher)
+            storage.consecutiveSellSignals += 1
+            storage.consecutiveBuySignals = 0
+            
+            price = i.open[i.open.length - 1]
+            lastPrice = i.open[i.open.length - 2]
+            lBand = _.last(lB)
+            uBand = _.last(uB)
+            l_lBand = lB[lB.length - 2]
+            l_uBand = uB[uB.length - 2]
+            
+#short order
+            if (!storage.initializedS and (lastPrice > l_uBand) and (price <= uBand))
+                if storage.invested
+                        debug "Closing Long Position.."
+                        try mt.closePosition i
+                        warn "Finished Closing Long Position!"
+                        storage.invested = false
+                else if !storage.invested
+                        try                
+                            if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance * 0.9975, info))
+                                storage.startBalance = info.margin_balance
+                                storage.initializedS = true
+                                storage.initializedL = false
+                                storage.shortPrice = i.price
+                                storage.shortStop = false
+                                storage.longStop = false
+                                storage.invested = true
+                            warn "Finished Short Order!"
+                            storage.consecutiveBuySignals = 0
+                            storage.consecutiveSellSignals = 0
+#short stop loss
+            if (SS_PCT > 0 and storage.initializedS and storage.invested and (i.price >= storage.shortPrice * ( 1 + (SS_PCT/100))))
+            		SstopOrder = mt.addOrder
+              		instrument: i
+              		side: 'buy'
+              		type: 'limit'
+              		amount: (pos.amount * -.9999)
+              		price: i.price
+        	    	storage.initializedS = false
+        	    	storage.shortStop = true
+        	    	storage.invested = false
+            if SstopOrder
+                warn "Finished Short Stop Order!"
+                plotMark
+                    "Stop Loss": i.price
+                storage.consecutiveBuySignals = 0
+                storage.consecutiveSellSignals = 0
+#short profit take
+            if (ST_PCT > 0 and storage.initializedS and storage.invested and (i.price <= storage.shortPrice / ( 1 + (ST_PCT/100))))
+                StakeOrder = mt.addOrder
+                  instrument: i
+                  side: 'buy'
+                  type: 'limit'
+                  amount: (pos.amount * -.9999)
+                  price: i.price
+                storage.initializedS = false
+                storage.shortTake = true
+                storage.invested = false
+            if StakeOrder
+                warn "Finished Short Profit Take Order!"
+                plotMark
+                    "Take Profit": i.price
+                storage.consecutiveBuySignals = 0
+                storage.consecutiveSellSignals = 0
+
+        else
+            storage.consecutiveBuySignals = 0	
+            storage.consecutiveSellSignals = 0
+
+    storage.lastFisher = fisher
+
+    debug "---------- BuyTFdip's DOPE A$$ MARGIN BOT ----------"
+    debug "Current Price: #{i.price.toFixed(8)} #{i._pair[1].toUpperCase()}"
+    if !pos
+        warn "Current Position: 0.0 #{i._pair[0].toUpperCase()}  0.0 #{i._pair[1].toUpperCase()}"
+    if pos
+        debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
+    if !pos
+        warn "Current Position P/L: N/A"
+    if pos
+        debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
+    debug "Margin balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
+    debug "Tradeable balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
+    debug " "
+#    plot
+#       "CMO": _.last(CMO)
+    plot
+        "TRIX": _.last(TRIX)            
     plot
         "Upper Band": _.last(uB)
-    debug "Middle Accelation Band: #{_.last(mB)}"
-    plot
-        "Mid Band": _.last(mB)
-    debug "Lower Accelation Band: #{_.last(lB)}"
     plot	
         "Lower Band": _.last(lB) 
-    debug "----------------------------------------------"
-    debug " "
 
 onStop: ->
     i = @data.instruments[0]
