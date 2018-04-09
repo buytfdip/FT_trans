@@ -12,7 +12,7 @@ LS_PCT = params.add "Long Order Stop Loss % (0 = Disable)", 5
 LT_PCT = params.add "Long Order Profit Take % (0 = Disable)", 15
 ST_PCT = params.add "Short Order Profit Take % (0 = Disable)", 15
 TIME = params.add "TRIX Time Period", 15
-S_MA = params.add "RSI MA TYPE", 2
+S_MA = params.add "STOCH  RSI MA TYPE", 2
 #
 #MA_Type:
 #   0 = SMA (Simple Moving Average)
@@ -120,24 +120,13 @@ handle: (context, data) ->
         inReal: i.close
         startIdx: 0
         endIdx: i.close.length - 1
-        optInTimePeriod: longPeriod
-        optInFastK_Period: shortPeriod
+        optInTimePeriod: shortPeriod
+        optInFastK_Period: longPeriod
         optInFastD_Period: longPeriod
-#MA_Type:
-#   0 = SMA (Simple Moving Average)
-#   1 = EMA (Exponential Moving Average)
-#   2 = WMA (Weighted Moving Average)
-#   3 = DEMA (Double Exponential Moving Average)
-#   4 = TEMA (Triple Exponential Moving Average)
-#   5 = TRIMA (Triangular Moving Average)
-#   6 = KAMA (Kaufman Adaptive Moving Average)
-#   7 = MAMA (MESA Adaptive Moving Average)
-#   8 = T3 (Triple Exponential Moving Average)
-#   Default=SMA if not provided
         optInFastD_MAType: S_MA        
 
-        K: RSI.outFastK
-        D: RSI.outFastD
+    K = RSI.outFastK
+    D = RSI.outFastD
 
     median = talib.MEDPRICE
         high: i.high
