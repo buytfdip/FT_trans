@@ -251,10 +251,16 @@ handle: (context, data) ->
 
     storage.lastFisher = fisher
 #handle log print
-    debug "---------- BuyTFdip's #{NUMBER_OF_DAYS}-DAY FT MARGIN BOT ----------"
+    debug "---------- BuyTFdip's DOPE A$$ MARGIN BOT ----------"
     debug "Current Price: #{i.price.toFixed(8)} #{i._pair[1].toUpperCase()}"
-    debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
-    debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
+    if !pos
+        warn "Current Position: 0.0 #{i._pair[0].toUpperCase()}  0.0 #{i._pair[1].toUpperCase()}"
+    if pos
+        debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
+    if !pos
+        warn "Current Position P/L: N/A"
+    if pos
+        debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
     debug "Margin balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
     debug " "
