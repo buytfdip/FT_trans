@@ -240,12 +240,8 @@ handle: (context, data) ->
         debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
     if (M_PL < 0)
         warn "Margin Balance P/L: #{(M_PL*100)}%"
-    if (T_PL < 0)
-        warn "Tradeable Balance P/L: #{(T_PL*100)}%"
-    if (T_PL > 0)
+    if (M_PL > 0)
         debug "Margin Balance P/L: #{(M_PL*100)}%"
-    if (T_PL > 0)
-        debug "Tradeable Balance P/L: #{(T_PL*100)}%"
     debug "Margin Balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable Balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
     debug " "
