@@ -115,8 +115,8 @@ handle: (context, data) ->
         uBand = _.last(uB)
         l_lBand = lB[lB.length - 2]
         l_uBand = uB[uB.length - 2]
-        M_PL = ((info.margin_balance - storage.start_MarginBalance)*100)
-        T_PL = ((info.tradable_balance - storage.start_TradableBalance)*100)
+        M_PL = (info.margin_balance - storage.start_MarginBalance)
+        T_PL = (info.tradable_balance - storage.start_TradableBalance)
             
 #long order
             if (!storage.initializedL and (ClastPrice < l_lBand or OlastPrice < l_lBand) and (price >= lBand))
@@ -238,8 +238,14 @@ handle: (context, data) ->
         warn "Current Position P/L: N/A"
     if pos
         debug "Current Position P/L: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
-    debug "Margin Balance P/L: #{M_PL}%"
-    debug "Tradeable Balance P/L: #{T_PL}%"
+    if (M_PL < 0)
+        warn "Margin Balance P/L: #{(M_PL*100)}%"
+    if (T_PL < 0)
+        warn "Tradeable Balance P/L: #{(T_PL*100)}%"
+    if (T_PL > 0)
+        debug "Margin Balance P/L: #{(M_PL*100)}%"
+    if (T_PL > 0)
+        debug "Tradeable Balance P/L: #{(T_PL*100)}%"
     debug "Margin Balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable Balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
     debug " "
