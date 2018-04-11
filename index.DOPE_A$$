@@ -115,7 +115,7 @@ handle: (context, data) ->
         uBand = _.last(uB)
         l_lBand = lB[lB.length - 2]
         l_uBand = uB[uB.length - 2]
-        M_PL = ((info.margin_balance - storage.start_MarginBalance)/ storage.start_MarginBalance)
+        M_PL = ((info.margin_balance - storage.start_MarginBalance) / storage.start_MarginBalance)
         T_PL = ((info.tradable_balance - storage.start_TradableBalance) / storage.start_TradableBalance)
             
 #long order
