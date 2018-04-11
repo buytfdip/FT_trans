@@ -228,9 +228,9 @@ handle: (context, data) ->
                 plotMark
                     "Take Profit": i.price
 
-    debug "---------- BuyTFdip's DOPE A$$ MARGIN BOT -----------|"
+    warn "--------------- BuyTFdip's DOPE A$$ MARGIN BOT ---------------"
     debug "Current Price: #{i.price.toFixed(8)} #{i._pair[1].toUpperCase()}"
-    debug "-x--x--x--x--x-"
+    warn "--------------------------------------------------------------"
     if !pos
         warn "Current Position: 0.0 #{i._pair[0].toUpperCase()}  0.0 #{i._pair[1].toUpperCase()}"
     if pos
@@ -239,16 +239,16 @@ handle: (context, data) ->
         warn "Current Position P/L%: N/A"
     if pos
         debug "Current Position P/L%: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
-    debug "-x--x--x--x--x-"
+    warn "--------------------------------------------------------------"
     debug "Margin Balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable Balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
-    debug "-x--x--x--x--x-"
+    warn "--------------------------------------------------------------"
     if M_PL < 0
         warn "Bot Efficiency: #{(M_PL*100)}%"    
     if M_PL > 0
-        debug "Bot Efficiency: #{(M_PL*100)}%"
-    debug "-----------------------------------------------------|"
-    debug "-x--x--x--x--x-"
+        debug "Bot Efficiency: +#{(M_PL*100)}%"
+    warn "--------------------------------------------------------------"
+    debug " "
 #   plot
 #       "CMO": _.last(CMO)
     plot
