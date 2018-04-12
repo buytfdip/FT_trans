@@ -148,7 +148,7 @@ handle: (context, data) ->
     LPT_SPLT = (1*(PT_PCT/100))
 
 #pre long/close short
-    if storage.short and !storage.long and (price < LBand) and (dx_L3 > dx_L2) and (dx_L2 < dx)
+    if !storage.long and storage.invested and (price < LBand) and (dx_L3 > dx_L2) and (dx_L2 < dx)
         try
             mt.closePosition i
             warn "Finished Closing Short Position!"
@@ -199,7 +199,7 @@ handle: (context, data) ->
             "Take Profit": i.price
     
 #pre short/ close long order
-    if storage.long and !storage.short and (price > UBand) and (dx_L3 < dx_L2) and (dx_L2 > dx)
+    if !storage.short and storage.invested and (price > UBand) and (dx_L3 < dx_L2) and (dx_L2 > dx)
         try
             mt.closePosition i
             warn "Finished Closing Long Position!"
