@@ -8,7 +8,7 @@ BB_UP = params.add "Boll Bands Dev Up", .5
 BB_DN = params.add "Boll Bands Dev Down", .5
 BB_MA = params.add "Boll Bands MA", 2
 # MAType: 0=SMA, 1=EMA, 2=WMA, 3=DEMA, 4=TEMA, 5=TRIMA, 6=KAMA, 7=MAMA, 8=T3 (Default=SMA)
-TIME = params.add "Directional Momentum Index Time Period", 10
+TIME = params.add "Directional Momentum Index Time Period", 25
 TIME2 = params.add "Relative Strength Index Time Period", 10
 SS_PCT = params.add "Short Order Stop Loss % (0 = Disable)", 5
 LS_PCT = params.add "Long Order Stop Loss % (0 = Disable)", 5 
@@ -148,7 +148,7 @@ handle: (context, data) ->
     LPT_SPLT = (1*(PT_PCT/100))
 
 #pre long/close short
-    if storage.short and (price < LBand) and (dx_L3 > dx_L2) and (dx_L2 < dx)
+    if storage.short and !storage.long and (price < LBand) and (dx_L3 > dx_L2) and (dx_L2 < dx)
         try
             mt.closePosition i
             warn "Finished Closing Short Position!"
@@ -158,7 +158,7 @@ handle: (context, data) ->
             plotMark
                 "Close Position": i.price
 #open long order
-    if !storage.invested and (price < LBand) and (dx_L3 < dx_L2) and (dx_L2 < dx)
+    if !storage.long and (price <= LBand) and (dx_L3 < dx_L2) and (dx_L2 < dx)
         try
             if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
                 storage.startBalance = info.margin_balance
@@ -170,14 +170,13 @@ handle: (context, data) ->
                 storage.invested = true
             warn "Finished Long Order!"
 #long stop loss
-    if (LS_PCT > 0 and storage.long and storage.invested and (i.price <= storage.longPrice / ( 1 + (LS_PCT/100))))
+    if (LS_PCT > 0 and storage.long and !storage.longStop and (i.price <= storage.longPrice / ( 1 + (LS_PCT/100))))
     		LstopOrder = mt.addOrder
       		instrument: i
       		side: 'sell'
       		type: 'limit'
       		amount: pos.amount * LSL_SPLT
       		price: i.price
-	    	storage.short = false
 	    	storage.longStop = true
 	    	storage.invested = false
     if LstopOrder
@@ -185,14 +184,13 @@ handle: (context, data) ->
         plotMark
             "Stop Loss": i.price
 #long profit take
-    if (LT_PCT > 0 and storage.long and storage.invested and (i.price >= storage.longPrice * ( 1 + (LT_PCT/100))))
+    if (LT_PCT > 0 and storage.long and !storage.longTake and (i.price >= storage.longPrice * ( 1 + (LT_PCT/100))))
         LtakeOrder = mt.addOrder
           instrument: i
           side: 'sell'
           type: 'limit'
           amount: pos.amount * LPT_SPLT
           price: i.price
-        storage.short = false
         storage.longTake = true
         storage.invested = false
     if LtakeOrder
@@ -201,7 +199,7 @@ handle: (context, data) ->
             "Take Profit": i.price
     
 #pre short/ close long order
-    if storage.long and (price > UBand) and (dx_L3 < dx_L2) and (dx_L2 > dx)
+    if storage.long and !storage.short and (price > UBand) and (dx_L3 < dx_L2) and (dx_L2 > dx)
         try
             mt.closePosition i
             warn "Finished Closing Long Position!"
@@ -211,9 +209,9 @@ handle: (context, data) ->
             plotMark
                 "Close Position": i.price
 #open short order
-    if !storage.invested and (price > UBand) and (dx_L3 > dx_L2) and (dx_L2 > dx)
+    if !storage.long and (price >= UBand) and (dx_L3 > dx_L2) and (dx_L2 > dx)
         try
-            if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
+            if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
                 storage.startBalance = info.margin_balance
                 storage.long = false
                 storage.short = true
@@ -223,7 +221,7 @@ handle: (context, data) ->
                 storage.invested = true
             warn "Finished Short Order!"
 #short stop loss
-    if (SS_PCT > 0 and storage.short and storage.invested and (i.price >= storage.shortPrice * ( 1 + (SS_PCT/100))))
+    if (SS_PCT > 0 and storage.short and storage.shortStop and (i.price >= storage.shortPrice * ( 1 + (SS_PCT/100))))
     		SstopOrder = mt.addOrder
       		instrument: i
       		side: 'buy'
@@ -238,7 +236,7 @@ handle: (context, data) ->
         plotMark
             "Stop Loss": i.price
 #short profit take
-    if (ST_PCT > 0 and storage.short and storage.invested and (i.price <= storage.shortPrice / ( 1 + (ST_PCT/100))))
+    if (ST_PCT > 0 and storage.short and storage.ShortTake and (i.price <= storage.shortPrice / ( 1 + (ST_PCT/100))))
         StakeOrder = mt.addOrder
           instrument: i
           side: 'buy'
