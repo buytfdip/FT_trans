@@ -81,6 +81,8 @@ handle: (context, data) ->
     storage.longStop ?= null
     storage.shortStop ?= null
     storage.invested ?= null
+    storage.preLong ?= null
+    storage.preShort ?= null    
     storage.start_MarginBalance ?= info.margin_balance
     storage.start_TradableBalance ?= info.tradable_balance
 
@@ -148,7 +150,7 @@ handle: (context, data) ->
     LPT_SPLT = (1*(PT_PCT/100))
 
 #pre long/close short
-    if !storage.long and storage.invested and (price < LBand) and (dx_L3 > dx_L2) and (dx_L2 < dx)
+    if (price < LBand) and (dx_L3 > dx_L2) and (dx_L2 < dx)
         try
             mt.closePosition i
             warn "Finished Closing Short Position!"
