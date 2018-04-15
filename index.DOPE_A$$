@@ -87,6 +87,15 @@ handle: (context, data) ->
     storage.start_TradableBalance ?= info.tradable_balance
 
 #indicators
+#TEMA
+    T3 = talib.TEMA
+        inReal: i.close
+        startIdx: 0
+        endIdx: i.close.length - 1
+        optInTimePeriod: TIME
+
+    T3 = _.last(T3)
+
 #DX
     DX = talib.DX
         high: i.high
@@ -142,9 +151,9 @@ handle: (context, data) ->
     dx_L3 = DX[DX.length - 3]
 #bot efficiency math
     M_PL = ((info.margin_balance - storage.start_MarginBalance) / storage.start_MarginBalance)
-    if pos > 0
+    if pos and (pos.amount > 0)
         T_PL = (((pos.amount * i.price) - storage.start_TradableBalance) / storage.start_TradableBalance)
-    if pos < 0
+    if pos and (pos.amount < 0)
         T_PL = (((-1*(pos.amount * i.price))- storage.start_TradableBalance) / storage.start_TradableBalance)
     TOTAL_PL = (M_PL + T_PL)
     BH_PL = ((i.price - storage.startPrice) / storage.startPrice)
@@ -294,10 +303,18 @@ handle: (context, data) ->
         debug "Bot P/L%: +#{(M_PL*100)}%"
     if pos and TOTAL_PL < 0
         warn "Bot P/L%: #{(TOTAL_PL*100)}%"    
+    if pos
+        warn " Taradeable Bot P/L%: #{(T_PL*100)}%"    
     if pos and TOTAL_PL > 0
         debug "Bot P/L%: +#{(TOTAL_PL*100)}%"
     warn "--------------------------------------------------------------"
     debug " "           
+    plot
+        "TEMA": T3
+    plot
+        "Upper Band": _.last(UB)
+    plot	
+        "Lower Band": _.last(LB)
 
 onStop: ->
     i = @data.instruments[0]
