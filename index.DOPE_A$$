@@ -140,9 +140,14 @@ handle: (context, data) ->
     dx = _.last(DX)
     dx_L2 = DX[DX.length - 2]
     dx_L3 = DX[DX.length - 3]
-#efficiency math
+#bot efficiency math
     M_PL = ((info.margin_balance - storage.start_MarginBalance) / storage.start_MarginBalance)
-    T_PL = ((info.tradable_balance - storage.start_TradableBalance) / storage.start_TradableBalance)
+    if pos > 0
+        T_PL = (((pos.amount * i.price) - storage.start_TradableBalance) / storage.start_TradableBalance)
+    if pos < 0
+        T_PL = ((-1*(pos.amount * i.price))- storage.start_TradableBalance) / storage.start_TradableBalance)
+    TOTAL_PL = (M_PL + T_PL)
+    BH_PL = ((i.price - storage.startPrice) / storage.startPrice)
 #order split math
     SSL_SPLT = (-1*(SL_PCT/100))
     LSL_SPLT = (1*(SL_PCT/100))
@@ -253,13 +258,18 @@ handle: (context, data) ->
         plotMark
             "Take Profit": i.price
 
+#print log
     warn "--------------- BuyTFdip's DOPE A$$ MARGIN BOT ---------------"
     debug "Current Price: #{i.price.toFixed(8)} #{i._pair[1].toUpperCase()}"
     warn "--------------------------------------------------------------"
+#
+#current position
     if !pos
         warn "Current Position: 0.0 #{i._pair[0].toUpperCase()}  0.0 #{i._pair[1].toUpperCase()}"
     if pos
         debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
+#
+#current position p/l %
     if !pos
         warn "Current Position P/L%: N/A"
     if pos
@@ -268,20 +278,26 @@ handle: (context, data) ->
     debug "Margin Balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable Balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
     warn "--------------------------------------------------------------"
-    if M_PL < 0
-        warn "Bot Efficiency: #{(M_PL*100)}%"    
-    if M_PL > 0
-        debug "Bot Efficiency: +#{(M_PL*100)}%"
+#
+#buy and hold p/l %
+    if BH_PL < 0
+        warn "B&H P/L%: #{(BH_PL*100)}%"
+    if BH_PL > 0
+        debug "B&H P/L%: +#{(BH_PL*100)}%"
+#
+#bot p/l %
+    if M_PL == 0
+        warn "Bot P/L%: N/A"
+    if !pos and M_PL < 0
+        warn "Bot P/L%: #{(M_PL*100)}%"    
+    if !pos and M_PL > 0
+        debug "Bot P/L%: +#{(M_PL*100)}%"
+    if pos and TOTAL_PL < 0
+        warn "Bot P/L%: #{(TOTAL_PL*100)}%"    
+    if pos and TOTAL_PL > 0
+        debug "Bot P/L%: +#{(TOTAL_PL*100)}%"
     warn "--------------------------------------------------------------"
-    debug " "
-    plot
-        DX: _.last(DX)            
-    plot
-        "Upper Band": _.last(UB)
-    plot	
-        "Middle Band": _.last(MB)
-    plot	
-        "Lower Band": _.last(LB) 
+    debug " "           
 
 onStop: ->
     i = @data.instruments[0]
