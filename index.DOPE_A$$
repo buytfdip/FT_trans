@@ -145,7 +145,7 @@ handle: (context, data) ->
     if pos > 0
         T_PL = (((pos.amount * i.price) - storage.start_TradableBalance) / storage.start_TradableBalance)
     if pos < 0
-        T_PL = ((-1*(pos.amount * i.price))- storage.start_TradableBalance) / storage.start_TradableBalance)
+        T_PL = (((-1*(pos.amount * i.price))- storage.start_TradableBalance) / storage.start_TradableBalance)
     TOTAL_PL = (M_PL + T_PL)
     BH_PL = ((i.price - storage.startPrice) / storage.startPrice)
 #order split math
