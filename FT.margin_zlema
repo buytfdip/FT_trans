@@ -142,8 +142,8 @@ handle: (context, data) ->
       inReal1: emad
       startIdx: 0
       endIdx: ema1.length-1
-    Z = _last.(emad)
-#order split math
+      
+    Z = _.last(emad)
 
 #bot efficiency math
     M_PL = ((info.margin_balance - storage.start_MarginBalance) / storage.start_MarginBalance)
