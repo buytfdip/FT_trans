@@ -7,12 +7,14 @@ params = require 'params'
 NUMBER_OF_DAYS = params.add "Number of days used for calculations", 3
 CONSECUTIVE_BUY_SIGNALS_K = params.add "Consecutive close short signals required", 1
 CONSECUTIVE_SELL_SIGNALS_K = params.add "Consecutive close long signals required", 1
-CONSECUTIVE_BUY_SIGNALS_O = params.add "Consecutive open long signals required", 2
-CONSECUTIVE_SELL_SIGNALS_O = params.add "Consecutive open short signals required", 2
+CONSECUTIVE_BUY_SIGNALS_O = params.add "Consecutive open long signals required", 1
+CONSECUTIVE_SELL_SIGNALS_O = params.add "Consecutive open short signals required", 1
+E1 = params.add "ZLEMA Period 1", 5
+E2 = params.add "ZLEMA Period 2", 15
 SS_PCT = params.add "Short Stop Loss %", 7
 LS_PCT = params.add "Long Stop Loss %", 7
-LT_PCT = params.add "Short Profit Take %", 25
-ST_PCT = params.add "Long Stop Take %", 25
+LT_PCT = params.add "Long Profit Take %", 7.5
+ST_PCT = params.add "Short Profit Take %", 7.5
 
 class Margin
 
@@ -61,12 +63,6 @@ init: (context) ->
 #
         "Take Profit":
             color: 'rgb(255, 128, 0)'
-#
-        ZLEMA:
-            color: 'rgb(200, 70, 191)'
-            size: 5
-            secondary: false
-            lineWidth: 1.5
 
 handle: (context, data) ->
     i = data.instruments[0]
@@ -122,12 +118,12 @@ handle: (context, data) ->
       inReal: i.close
       startIdx: 0
       endIdx: i.close.length-1
-      optInTimePeriod: longPeriod
+      optInTimePeriod: E1
     ema2 = talib.EMA
       inReal: ema1
       startIdx: 0
       endIdx: ema1.length-1
-      optInTimePeriod: shortPeriod
+      optInTimePeriod: E2
     if ema1.length > ema2.length
       ema1 = _.drop(ema1, ema1.length - ema2.length)
     if ema2.length > ema1.length
@@ -364,8 +360,6 @@ handle: (context, data) ->
     warn "--------------------------------------------------------------"
     debug " "           
 #graph plot
-    plot
-        ZLEMA: _.last(Z)
 
 onStop: ->
     i = @data.instruments[0]
