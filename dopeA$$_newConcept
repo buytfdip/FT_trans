@@ -3,13 +3,12 @@ mt = require 'margin_trading'
 talib = require 'talib'
 params = require 'params'
 
-BB_P = params.add "Boll Bands Time Period", 10
-BB_UP = params.add "Boll Bands Dev Up", .5
-BB_DN = params.add "Boll Bands Dev Down", .5
+BB_P = params.add "Boll Bands Time Period", 20
+BB_UP = params.add "Boll Bands Dev Up", .75
+BB_DN = params.add "Boll Bands Dev Down", .75
 BB_MA = params.add "Boll Bands MA", 2
 # MAType: 0=SMA, 1=EMA, 2=WMA, 3=DEMA, 4=TEMA, 5=TRIMA, 6=KAMA, 7=MAMA, 8=T3 (Default=SMA)
-TIME = params.add "Directional Momentum Index Time Period", 15
-TIME2 = params.add "TEMA Time Period", 5
+TIME = params.add "TEMA Time Period", 5
 SS_PCT = params.add "Short Order Stop Loss % (0 = Disable)", 5
 LS_PCT = params.add "Long Order Stop Loss % (0 = Disable)", 5
 LT_PCT = params.add "Long Order Profit Take % (0 = Disable)", 15
@@ -44,26 +43,25 @@ class Margin
         return (startingBalance + marginPosition.amount * (currentPrice - marginPosition.price))
 
 init: (context) ->
-
+    
     warn "BuyTFdip's DOPE A$$ MARGIN BOT is warming up"
     debug "..."
 
     setPlotOptions
         "Close Position":
-            color: 'rgb(0, 102, 255)'
+              color: 'rgb(0, 102, 255)'
         "Stop Loss":
-            color: 'rgb(0, 0, 0)'
+             color: 'rgb(0, 0, 0)'
         "Take Profit":
             color: 'rgb(255, 128, 0)'
-        "DMI":
-            color: 'rgb(0, 230, 138)'
-            size: 5	
-            secondary: true
-            lineWidth: 1.5
+        "Upper Band":
+            color: 'rgb(230, 0, 172)'
+            lineWidth: 2
+        "Lower Band":
+            color: 'rgb(0, 102, 255)'          
+            lineWidth: 2    
         "TEMA":
-            color: 'rgb(204, 0, 204)'
-            size: 5	
-            secondary: false
+            color: 'rgb(0, 0, 0)'
             lineWidth: 1.5
 
 handle: (context, data) ->
@@ -76,34 +74,17 @@ handle: (context, data) ->
     storage.longPrice ?= null
     storage.start_MarginBalance ?= info.margin_balance
     storage.start_TradableBalance ?= info.tradable_balance
-    storage.invested ?= false
 #long order storage
     storage.long ?= false
     storage.longTake ?= false
     storage.longStop ?= false
-    storage.longStart ?= 0
-    storage.longEnd1 ?= 0
-    storage.longEnd2 ?= 0
-
 #short order storage
     storage.short ?= false
     storage.shortStop ?= false
     storage.shortTake ?= false
-    storage.shortStart ?= 0
-    storage.shortEnd1 ?= 0   
-    storage.shortEnd2 ?= 0   
-
+    
 #indicators
-
-#PLUS DM
-    DP = talib.PLUS_DI
-        high: i.high
-        low: i.low
-        close: i.close
-        startIdx: 0
-        endIdx: i.close.length - 1
-        optInTimePeriod: TIME
-                
+     
 #BBANDS  
     results = talib.BBANDS
         inReal : i.close
@@ -114,39 +95,22 @@ handle: (context, data) ->
         optInNbDevDn: BB_DN
         # MAType: 0=SMA, 1=EMA, 2=WMA, 3=DEMA, 4=TEMA, 5=TRIMA, 6=KAMA, 7=MAMA, 8=T3 (Default=SMA)
         optInMAType : BB_MA
-    
+
     UB = results.outRealUpperBand
     MB = results.outRealMiddleBand
     LB = results.outRealLowerBand
 
+    UBand = _.last(UB)
+    LBand = _.last(LB)
 #TEMA
     T3 = talib.TEMA
         inReal: i.close
         startIdx: 0
         endIdx: i.close.length - 1
-        optInTimePeriod: TIME2
-    
-#past period prices tags
-    price_L2_C = i.close[i.close.length - 2]
-    price_L3_C = i.close[i.close.length - 3]
-    price_L2_O = i.open[i.open.length - 2]
-    price_L3_O = i.open[i.open.length - 3]    
-#upper band history tags
-    UBand = _.last(UB)
-    UBand_L2 = UB[UB.length - 2]
-    UBand_L3 = UB[UB.length - 3]
-#lower band history tags
-    LBand = _.last(LB)
-    LBand_L2 = LB[LB.length - 2]
-    LBand_L3 = LB[LB.length - 3]
-#TEMA history tags
-    t3 = _.last(T3)
-    T3_L2 = T3[T3.length - 2]
-    T3_L3 = T3[T3.length - 3]
-#Positive Direction Indicator history tags    
-    dP = _.last(DP)
-    DP_L2 = DP[DP.length - 2]
-    DP_L3 = DP[DP.length - 3]
+        optInTimePeriod: TIME
+
+    T3 = _.last(T3)
+
 #efficiency math
     M_PL = ((info.margin_balance - storage.start_MarginBalance) / storage.start_MarginBalance)
     T_PL = ((info.tradable_balance - storage.start_TradableBalance) / storage.start_TradableBalance)
@@ -156,53 +120,28 @@ handle: (context, data) ->
     LSL_SPLT = (1*(SL_PCT/100))
     SPT_SPLT = (-1*(PT_PCT/100))
     LPT_SPLT = (1*(PT_PCT/100))
-#order conditions
-#long end 1
-    if (t3 >= UBand)
-        storage.longEnd1 += 1
-        storage.shortEnd1 += 0
-#long end 2
-    if (t3 > UBand)
-        storage.longEnd2 += 1
-        storage.shortEnd2 += 0
-#short order    
-    if (t3 > UBand)
-        storage.longStart += 0
-        storage.shortStart += 1
-#short end 1
-    if (t3 <= LBand)
-        storage.longEnd1 += 0
-        storage.shortEnd1 += 1
-#short end 2
-    if (t3 > LBand)
-        storage.longEnd2 += 0
-        storage.shortEnd2 += 1
-#long order
-    if (t3 < LBand)
-        storage.longStart += 1
-        storage.shortStart += 0        
-    #pre long/close short
-        if (storage.shortEnd1 >= 1 and storage.shortEnd2 >= 1)
-            try if mt.closePosition i
+  
+#pre long/close short
+    if (T3 >= LBand)
+        if pos and storage.short 
+            try 
+                mt.closePosition i
                 warn "Finished Closing Short Position!"
-                storage.shortEnd1 = 0
-                storage.shortEnd1 = 0
-                storage.longEnd1 = 0
-                storage.longEnd2 = 0
-                storage.longStart = 0
-                storage.shortStart = 0                
+                pos = mt.getPosition i
+                storage.short = false
+                storage.long = false               
                 plotMark
                     "Close Position": i.price
-    #open long order
-        else if storage.longStart >= 3
-            try if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
+#open long order
+    if !pos and (T3 >= UBand)
+        try 
+            if (@Margin.OpenLong(pos, i, i.price, info.tradable_balance, info))
+                pos = mt.getPosition i
+                storage.longPrice = i.price
                 storage.long = true
                 storage.short = false
-                storage.longPrice = price
-                storage.longStart = 0
-                storage.shortStart = 0
-                warn "Finished Long Order!"
-    #long stop loss
+            warn "Finished Long Order!"
+#long stop loss
         if storage.long and !storage.longStop and (LS_PCT > 0 and (i.price <= storage.longPrice / ( 1 + (LS_PCT/100))))
             LstopOrder = mt.addOrder
             instrument: i
@@ -210,12 +149,14 @@ handle: (context, data) ->
             type: 'limit'
             amount: pos.amount * LSL_SPLT
             price: i.price
+            pos = mt.getPosition i
             storage.longStop = true
+            storage.long = true
         if LstopOrder
             warn "Finished Long Stop Order!"
             plotMark
                 "Stop Loss": i.price
-    #long profit take
+#long profit take
         if storage.long and !storage.longTake and (LT_PCT > 0 and (i.price >= storage.longPrice * ( 1 + (LT_PCT/100))))
             LtakeOrder = mt.addOrder
             instrument: i
@@ -223,48 +164,49 @@ handle: (context, data) ->
             type: 'limit'
             amount: pos.amount * LPT_SPLT
             price: i.price
+            pos = mt.getPosition i
             storage.longTake = true
+            storage.long = true
         if LtakeOrder
             warn "Finished Long Profit Take Order!"
             plotMark
                 "Take Profit": i.price
-        
-    #pre short/ close long order
-        else if (storage.longEnd1 >= 1 and storage.longEnd2 >= 1)
-            try if mt.closePosition i
-                warn "Finished Closing Long Position!"
-                storage.shortEnd1 = 0
-                storage.shortEnd1 = 0
-                storage.longEnd1 = 0
-                storage.longEnd2 = 0
-                storage.longStart = 0
-                storage.shortStart = 0                
+#pre short/close long
+    if (T3 <= UBand)
+        if pos and storage.long 
+            try 
+                mt.closePosition i
+                warn "Finished Closing long Position!"
+                pos = mt.getPosition i
+                storage.short = false
+                storage.long = false               
                 plotMark
                     "Close Position": i.price
-    #open short order
-        else if storage.shortStart >= 3
-            try if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
-                storage.short = true
+#open short order
+    if !pos and (T3 <= LBand)  
+        try 
+            if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
+                pos = mt.getPosition i
+                storage.shortPrice = i.price
                 storage.long = false
-                storage.invested = true
-                storage.longPrice = price
-                storage.longStart = 0
-                storage.shortStart = 0
-                warn "Finished Short Order!"
-    #short stop loss
+                storage.short = true
+            warn "Finished Short Order!"
+#short stop loss
         if storage.short and !storage.shortStop and (SS_PCT > 0 and (i.price >= storage.shortPrice * ( 1 + (SS_PCT/100))))
-        		SstopOrder = mt.addOrder
-          		instrument: i
-          		side: 'buy'
-          		type: 'limit'
-          		amount: pos.amount * SSL_SPLT
-          		price: i.price
+            SstopOrder = mt.addOrder
+            instrument: i
+            side: 'buy'
+            type: 'limit'
+            amount: pos.amount * SSL_SPLT
+            price: i.price
+            pos = mt.getPosition i
             storage.shortStop = true
+            storage.short = true
         if SstopOrder
             warn "Finished Short Stop Order!"
             plotMark
                 "Stop Loss": i.price
-    #short profit take
+#short profit take
         if storage.short and !storage.shortTake and (ST_PCT > 0 and (i.price <= storage.shortPrice / ( 1 + (ST_PCT/100))))
             StakeOrder = mt.addOrder
             instrument: i
@@ -272,15 +214,21 @@ handle: (context, data) ->
             type: 'limit'
             amount: pos.amount * SPT_SPLT
             price: i.price
+            pos = mt.getPosition i
             storage.shortTake = true
+            storage.short = true      
         if StakeOrder
             warn "Finished Short Profit Take Order!"
             plotMark
-                "Take Profit": i.price
+            "Take Profit": i.price
 
 #print log
-    warn "--------------- BuyTFdip's DOPE A$$ MARGIN BOT ---------------"
+    warn "--------------- BuyTFdip's MARGIN BOT ---------------"
     debug "Current Price: #{i.price.toFixed(8)} #{i._pair[1].toUpperCase()}"
+    if BH_PL < 0
+        warn "B&H P/L%: #{(BH_PL*100)}%"
+    if BH_PL > 0
+        debug "B&H P/L%: +#{(BH_PL*100)}%"
     warn "--------------------------------------------------------------"
     if !pos
         warn "Current Position: 0.0 #{i._pair[0].toUpperCase()}  0.0 #{i._pair[1].toUpperCase()}"
@@ -288,36 +236,30 @@ handle: (context, data) ->
         debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
     if !pos
         warn "Current Position P/L%: N/A"
-    if pos
+    if pos  
         debug "Current Position P/L%: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
     warn "--------------------------------------------------------------"
     debug "Margin Balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable Balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
     warn "--------------------------------------------------------------"
-    if BH_PL < 0
-        warn "B&H P/L%: #{(BH_PL*100)}%"
-    if BH_PL > 0
-        debug "B&H P/L%: +#{(BH_PL*100)}%"
     if M_PL < 0
         warn "Bot P/L%: #{(M_PL*100)}%"    
     if M_PL > 0
         debug "Bot P/L%: +#{(M_PL*100)}%"
     warn "--------------------------------------------------------------"
-    debug " "           
+    debug " "       
     plot
-        "TEMA": t3
+        "TEMA": T3
     plot
-        "DMI": dP
-    plot
-        "Upper Band": _.last(UB)
+        "Upper Band": UBand
     plot	
-        "Lower Band": _.last(LB)
+        "Lower Band": LBand
 
 onStop: ->
-    i = @data.instruments[0]
-    # unlike orders open positions don't get cancelled when the bot is stopped
-    # the below snippet can be used to programmatically close it
-    pos = mt.getPosition i
-    if pos
-        debug "Closing position"
-        mt.closePosition i
+  i = @data.instruments[0]
+  # unlike orders open positions don't get cancelled when the bot is stopped
+  # the below snippet can be used to programmatically close it
+  pos = mt.getPosition i
+  if pos
+      debug "Closing position"
+      mt.closePosition i
