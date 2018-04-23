@@ -45,7 +45,7 @@ class Margin
 
 init: (context) ->
     
-    warn "BuyTFdip's DOPE A$$ MARGIN BOT is warming up"
+    warn "BuyTFdip's MARGIN BOT is warming up"
     debug "..."
 
     setPlotOptions
@@ -249,10 +249,6 @@ handle: (context, data) ->
         warn "Current Position: 0.0 #{i._pair[0].toUpperCase()}  0.0 #{i._pair[1].toUpperCase()}"
     if pos
         debug "Current Position: #{pos.amount} #{i._pair[0].toUpperCase()} at #{pos.price} #{i._pair[1].toUpperCase()}"
-    if !pos
-        warn "Current Position P/L%: N/A"
-    if pos  
-        debug "Current Position P/L%: #{@Margin.OpenPositionPL(i.price, pos).toFixed(2)}%"
     warn "--------------------------------------------------------------"
     debug "Margin Balance: #{info.margin_balance} #{i._pair[1].toUpperCase()}"
     debug "Tradeable Balance: #{info.tradable_balance} #{i._pair[1].toUpperCase()}"
