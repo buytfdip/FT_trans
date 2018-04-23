@@ -9,6 +9,7 @@ BB_DN = params.add "Boll Bands Dev Down", .75
 BB_MA = params.add "Boll Bands MA", 2
 # MAType: 0=SMA, 1=EMA, 2=WMA, 3=DEMA, 4=TEMA, 5=TRIMA, 6=KAMA, 7=MAMA, 8=T3 (Default=SMA)
 TIME = params.add "TEMA Time Period", 5
+TIME2 = params.add "RSI Time Period", 15
 SS_PCT = params.add "Short Order Stop Loss % (0 = Disable)", 5
 LS_PCT = params.add "Long Order Stop Loss % (0 = Disable)", 5
 LT_PCT = params.add "Long Order Profit Take % (0 = Disable)", 15
@@ -58,12 +59,17 @@ init: (context) ->
             color: 'rgb(230, 0, 172)'
             lineWidth: 2
         "Lower Band":
-            color: 'rgb(0, 102, 255)'          
+            color: 'rgb(77, 148, 255)'          
             lineWidth: 2    
         "TEMA":
             color: 'rgb(0, 0, 0)'
             lineWidth: 1.5
-
+        "RSI":
+            color: 'rgba(166, 166, 166, .45)'
+            size: 3
+            secondary: true
+            lineWidth: 3
+            
 handle: (context, data) ->
     i = data.instruments[0]
     info = mt.getMarginInfo i
@@ -110,7 +116,16 @@ handle: (context, data) ->
         optInTimePeriod: TIME
 
     T3 = _.last(T3)
+#RSI
+    rsi = talib.RSI
+        inReal: i.close
+        startIdx: 0
+        endIdx: i.close.length - 1
+        optInTimePeriod: TIME2
 
+    R = _.last(rsi)
+    R_2 = R[R.length - 2]
+    
 #efficiency math
     M_PL = ((info.margin_balance - storage.start_MarginBalance) / storage.start_MarginBalance)
     T_PL = ((info.tradable_balance - storage.start_TradableBalance) / storage.start_TradableBalance)
@@ -183,7 +198,7 @@ handle: (context, data) ->
                 plotMark
                     "Close Position": i.price
 #open short order
-    if !pos and (T3 <= LBand)  
+    if !pos and (T3 <= LBand)
         try 
             if (@Margin.OpenShort(pos, i, i.price, info.tradable_balance, info))
                 pos = mt.getPosition i
@@ -254,7 +269,8 @@ handle: (context, data) ->
         "Upper Band": UBand
     plot	
         "Lower Band": LBand
-
+    plot
+        "RSI": R
 onStop: ->
   i = @data.instruments[0]
   # unlike orders open positions don't get cancelled when the bot is stopped
